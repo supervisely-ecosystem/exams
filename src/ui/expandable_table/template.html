@@ -1,0 +1,180 @@
+
+<el-table
+    :data="data.{{{widget.widget_id}}}.table_data.data"
+    v-loading="data.{{{widget.widget_id}}}.loading"
+    empty-text="No Exams"
+>
+    <el-table-column type="expand">
+        <template scope="props">
+            <div>
+                <el-table
+                    :data="props.row.expandable_content.table_data.data"
+                    size="mini"
+                    :value="state.{{{widget.widget_id}}}.selected_row"
+                    @cell-click="state.{{{widget.widget_id}}}.selected_row = $event"
+                >   
+                    <el-table-column
+                        :min-width="30"
+                        label="USER"
+                        prop="user"
+                        sortable
+                    ></el-table-column>
+                    <el-table-column
+                        :min-width="15"
+                        label="TRY #"
+                        prop="try"
+                        sortable
+                    ></el-table-column>
+                    <el-table-column
+                        :min-width="15"
+                        label="STARTED"
+                        prop="started"
+                        sortable
+                    >
+                        <template scope="scope">
+                            {{ scope.row.started | moment('from') }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column
+                        :min-width="15"
+                        label="STATUS"
+                        prop="status"
+                        sortable
+                    >
+                        <template scope="scope">
+                            <span v-if="scope.row.status.startsWith('PASSED')" style="color:green">{{ scope.row.status }}</span>
+                            <span v-else-if="scope.row.status.startsWith('FAILED')" style="color:red">{{ scope.row.status }}</span>
+                            <span v-else style="color:grey">{{ scope.row.status }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column
+                        :min-width="25"
+                        label="REPORT"
+                    >
+                        <template scope="scope">
+                            <div style="display: flex; flex-direction: row;">
+                                <el-button
+                                    :disabled="['PENDING', 'IN PROGRESS'].includes(scope.row.status)"
+                                    :loading="scope.row.loading"
+                                    type="text"
+                                    {% if widget._refresh_click_handled %}
+                                    @click="
+                                        state.{{{widget.widget_id}}}.selected_row = scope.row;
+                                        post('/{{{widget.widget_id}}}/refresh_clicked_cb');
+                                    "
+                                    {% endif %}
+                                >
+                                    <i class="zmdi zmdi-refresh"></i> UPDATE
+                                </el-button>
+                                <el-button
+                                    :disabled="['PENDING', 'IN PROGRESS'].includes(scope.row.status)"
+                                    :loading="scope.row.loading"
+                                    type="text"
+                                    {% if widget._view_click_handled %}
+                                    @click="
+                                        state.{{{widget.widget_id}}}.selected_row = scope.row;
+                                        post('/{{{widget.widget_id}}}/view_clicked_cb');
+                                    "
+                                    {% endif %}
+                                >
+                                    <i class="zmdi zmdi-file-text"></i> VIEW
+                                </el-button>
+                            </div>
+                        </template>
+                    </el-table-column>
+                    
+                </el-table>
+            </div>
+        </template>
+    </el-table-column>
+
+    <el-table-column
+        label="EXAM"
+        :min-width="50"
+    >
+        <template scope="scope">
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                <b style="margin-right: 10px;">{{ scope.row.exam }}</b>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <el-tag type="gray">Passmark: {{ scope.row.passmark }}%</el-tag>
+                    <el-tag type="gray">Attempts: {{ scope.row.attempts }}</el-tag>
+                    <el-tag
+                        v-if="scope.row.classes.gt.length == 0"
+                        type="gray"
+                    >
+                        <i class="zmdi zmdi-brush" style="padding-right: 3px;"></i> No classes</el-tag>
+                    </el-tag>
+                    <el-tag
+                        v-if="(scope.row.classes.gt.length == scope.row.classes.pred.length) && (scope.row.classes.gt.length > 0)"
+                        type="gray"
+                    >
+                        <i class="zmdi zmdi-brush" style="padding-right: 3px;"></i> All classes</el-tag>
+                    </el-tag>
+                    <el-tag
+                        v-if="scope.row.classes.gt.length != scope.row.classes.pred.length"
+                        v-for="obj_class in scope.row.classes.gt"
+                        type="gray"
+                        :style="{'border-color': obj_class.color}"
+                    >
+                        <i class="zmdi zmdi-brush" style="padding-right: 3px;"></i>{{ obj_class.class_name }}
+                    </el-tag>
+                    <el-tag
+                        v-if="scope.row.tags.gt.length == 0"
+                        type="gray"
+                    >
+                        <i class="zmdi zmdi-label" style="padding-right: 3px;"></i>No tags</el-tag>
+                    </el-tag>
+                    <el-tag
+                        v-if="(scope.row.tags.gt.length == scope.row.tags.pred.length) && (scope.row.tags.gt.length > 0)"
+                        type="gray"
+                    >
+                        <i class="zmdi zmdi-label" style="padding-right: 3px;"></i>All tags</el-tag>
+                    </el-tag>
+                    <el-tag
+                        v-if="scope.row.tags.gt.length != scope.row.tags.pred.length"
+                        v-for="tag in scope.row.tags.gt"
+                        type="gray"
+                        :style="{'border-color': tag.color}"
+                    >
+                        <i class="zmdi zmdi-label" style="padding-right: 3px;"></i>{{ tag.tag_name }}
+                    </el-tag>
+                </div>
+            </div>
+            <div>
+                <span style="font-size: small; color:#6e7b8b">Created {{ scope.row.created_at | moment('from') }} by <b>{{ scope.row.created_by }}</b></span>
+            </div>
+        </template>
+    </el-table-column>
+
+    <el-table-column
+        label="ASSIGNEES"
+        :min-width="20"
+    >
+        <template scope="scope">
+            <!-- <el-tooltip class="item" effect="dark" placement="bottom"> -->
+                <!-- <div slot="content">Assigned 1<br/>Passed 0<br/>Failed 1</div> -->
+                <b>Total: {{ scope.row.assignees.length }}</b>
+            <!-- </el-tooltip> -->
+        </template>
+    </el-table-column>
+
+    <el-table-column
+        label="BENCHMARK PROJECT"
+        :min-width="30"
+    >
+        <template scope="scope">
+            <sly-field 
+                title="" 
+                :description=" scope.row.benchmark_project.description "
+            >
+                <a slot="title" target="_blank" :href="scope.row.benchmark_project.url">
+                    {{ scope.row.benchmark_project.name }}
+                </a>
+                <sly-icon
+                    slot="icon"
+                    :options="{ imageUrl: scope.row.benchmark_project.preview_url }"
+                />
+            </sly-field>
+        </template>
+    </el-table-column>
+</el-table>
