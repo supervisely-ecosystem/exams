@@ -131,10 +131,19 @@ select_users = Select(
 )
 assigned_users = Card(
     title="ASSIGNED USERS",
-    description="This exam will appear at the Exams page for every user, selected below. You can add (or remove) more users later.",
+    description="This exam will appear as Labeling job at the Labeling Jobs page for every user, selected below.",
     content=Field(title="Assign to", content=select_users),
 )
 
+select_reviewer = Select(
+    items=[Select.Item(user.id, user.name) for user in g.users],
+    size="small",
+)
+reviewers = Card(
+    title="ASSIGNED REVIEWERS",
+    description="Assign reviewers for lableling jobs, created by this exam.",
+    content=Field(title="Assign to", content=select_reviewer),
+)
 
 guide_editor = Editor(language_mode="plain_text")
 guide_file = FileStorageUpload(g.team_id, f"exam_data/guide")
@@ -149,7 +158,7 @@ exam_guide_one_of = OneOf(exam_guide_select)
 
 
 input_passmark = InputNumber(min=0, max=100, step=1, value=90, size="small")
-matching_threshold = InputNumber(min=0, max=100, step=1, value=90, size="small")
+matching_threshold = InputNumber(min=0, max=100, step=1, value=80, size="small")
 input_attempts = InputNumber(min=0, max=100, step=1, value=1, size="small")
 maximum_attempts = RadioGroup(
     items=[
@@ -161,6 +170,7 @@ time_limit = Select(items=[Select.Item("Unlimited")])
 # disable because it is coming soon
 time_limit.disable()
 show_report_to_labelers_checkmark = Checkbox(content="Show report to labelers")
+show_report_to_labelers_checkmark.hide()
 
 exam_settings = Card(
     title="EXAM SETTINGS",
@@ -229,6 +239,7 @@ def create_exam():
     classes_whitelist = select_classes.get_value()
     tags_whitelist = select_tags.get_value()
     users = select_users.get_value()
+    reviewer = select_reviewer.get_value()
     guide = get_guide()
     if guide is None:
         sly.app.show_dialog("Guide not selected", f'Guide not selected. Please select file', "warning")
@@ -242,7 +253,7 @@ def create_exam():
         else input_attempts.get_value()
     )
     show_report_to_labelers = show_report_to_labelers_checkmark.is_checked()
-    progress = status_bar(iterable=[step for step in range(2+len(users))])
+    progress = status_bar(iterable=[step for step in range(100)])
 
     if g.api.workspace.exists(g.team_id, f'Exam: "{exam_name}"'):
         sly.app.show_dialog("Exam exist", f'Exam with name "{exam_name}" already exists. Please enter new name', "warning")
@@ -258,7 +269,7 @@ def create_exam():
 
     # create workspace
     exam_workspace = utils.create_exam_workspace(exam_name)
-    progress.update()
+    progress.update(100//(2+len(users)))
     
     # copy benchmark project to exam worksapce
     source_dataset_info = g.api.dataset.get_info_by_id(source_dataset_id)
@@ -276,6 +287,8 @@ def create_exam():
 
     # add exam settings to becnhmark project custom data
     benchmark_project_custom_data = {
+        "source_project_id": source_dataset_info.project_id,
+        "source_dataset_id": source_dataset_id,
         "exam_name": exam_name,
         "source_project_id": source_dataset_info.project_id,
         "source_dataset_id": source_dataset_id,
@@ -291,7 +304,7 @@ def create_exam():
     g.api.project.update_custom_data(
         benchmark_project.id, benchmark_project_custom_data
     )
-    progress.update()
+    progress.update(100//(2+len(users)))
     
     # create project and labeling job for each user
     for user_id in users:
@@ -313,15 +326,15 @@ def create_exam():
             description="",
             classes_to_label=classes_whitelist,
             tags_to_label=tags_whitelist,
-            reviewer_id=g.user_id,
+            reviewer_id=reviewer,
         )
-        progress.update()
+        progress.update(100//(2+len(users)))
     status_bar.hide()
     return True
 
 cancel_btn = Button(text="Cancel")
-
 confirm_buttons = Flexbox(widgets=[create_btn, cancel_btn])
+return_btn = Button(text="Return to Exams", button_size="small", icon="zmdi zmdi-arrow-left")
 
 def clean_up():
     title_input.set_value("")
@@ -330,14 +343,16 @@ def clean_up():
     select_users.set_value([])
     guide_editor.set_text("")
     input_passmark.value = 90
-    matching_threshold.value = 90
+    matching_threshold.value = 80
 
 layout = Container(
     widgets=[
         Text("<h2>Create Exam</h2>"),
+        return_btn,
         exam_title,
         becnhmark_project,
         assigned_users,
+        reviewers,
         exam_settings,
         confirm_buttons,
         status_bar,

@@ -30,7 +30,7 @@ gt_img_anns = {}
 pred_img_anns = {}
 diff_img_anns = {}
 
-
+assigned_to = Text("")
 exam_passmark = Text("")
 exam_score = Text("")
 status = Text("")
@@ -40,6 +40,7 @@ overall_stats = Card(
     title="EXAM OVERALL STATS",
     content=Flexbox(
         widgets=[
+            Field(title="Assigned to", content=assigned_to),
             Field(title="Exam Passmark", content=exam_passmark),
             Field(title="Exam Score", content=exam_score),
             Field(title="Status", content=status),
@@ -62,7 +63,7 @@ obj_count_per_class_last = Text()
 obj_count_per_class = Card(
     title="OBJECTS COUNT PER CLASS",
     content=Container(
-        widgets=[obj_count_per_class_table, obj_count_per_class_last], gap=0
+        widgets=[obj_count_per_class_table, obj_count_per_class_last], gap=5
     ),
 )
 
@@ -71,12 +72,11 @@ geometry_quality_table = Table(columns=geometry_quality_table_columns)
 geometry_quality_last = Text()
 geometry_quality = Card(
     title="GEOMETRY QUALITY",
-    content=Container(widgets=[geometry_quality_table, geometry_quality_last], gap=0),
+    content=Container(widgets=[geometry_quality_table, geometry_quality_last], gap=5),
 )
 
 tags_stat_table_columns = [
     "NAME",
-    "Applicable To",
     "GT Tags",
     "Labeled Tags",
     "Precision",
@@ -86,7 +86,7 @@ tags_stat_table_columns = [
 tags_stat_table = Table(columns=tags_stat_table_columns)
 tags_stat_last = Text()
 tags_stat = Card(
-    title="TAGS", content=Container(widgets=[tags_stat_table, tags_stat_last], gap=0)
+    title="TAGS", content=Container(widgets=[tags_stat_table, tags_stat_last], gap=5)
 )
 
 report_per_image_table_columns = [
@@ -130,7 +130,7 @@ def show_images(datapoint):
 report_per_image_images = GridGallery(3)
 report_per_image = Card(title="REPORT PER IMAGE", content=Container(widgets=[report_per_image_table, Card(content=report_per_image_images, collapsable=True)]))
 
-return_button = Button("Return to Exams")
+return_button = Button("Return to Exams", button_size="small", icon="zmdi zmdi-arrow-left")
 
 results = Container(
     widgets=[
@@ -237,7 +237,6 @@ def get_tags_stat_table_row(result, tag_name):
     
     return [
         tag_name,
-        "all",
         total_gt,
         total_pred,
         f"{int(precision*total_gt)} of {total_gt} ({round(precision*100, 2)}%)",
@@ -332,6 +331,7 @@ def clean_up():
         }
     )
 
+    assigned_to.set("-", status="text")
     exam_passmark.set("-", status="text")
     exam_score.set("-", status="text")
     status.set("-", status="text")
@@ -339,6 +339,7 @@ def clean_up():
 
 @sly.timeit
 def calculate_report(benchmark_dataset, exam_dataset, classes_whitelist, tags_whitelist, obj_tags_whitelist, iou_threshold):
+    return_button.disable()
     class_matches = [
         {"class_gt": v, "class_pred": v} for v in classes_whitelist
     ]
@@ -360,11 +361,12 @@ def calculate_report(benchmark_dataset, exam_dataset, classes_whitelist, tags_wh
         obj_tags_whitelist=obj_tags_whitelist,
         iou_threshold=iou_threshold/100,
     )
-    
+    return_button.enable()
+
     return report
 
 
-def render_report(report, benchmark_dataset_id, exam_dataset_id, classes, tags, passmark, iou_threshold):
+def render_report(report, benchmark_dataset_id, exam_dataset_id, classes, tags, passmark, iou_threshold, user):
     results.loading = True
     return_button.disable()
 
@@ -388,13 +390,12 @@ def render_report(report, benchmark_dataset_id, exam_dataset_id, classes, tags, 
         if diff_project is None or diff_dataset is None:
             raise RuntimeError("Difference project not found after recalculation")
 
-
     overall_score = get_overall_score(report)
+    assigned_to.set(user, status="text")
     exam_passmark.set(f"{passmark}%", status="text")
     exam_score.set(f"{round(overall_score*100, 2)}%", status="text")
     status.set('<span style="color: green;">PASSED</span>' if overall_score*100 > passmark else '<span style="color: red;">FAILED</span>', status="text")
     benchmark_project_thumbnail.set(benchmark_project)
-
 
     # load images
     global gt_imgs

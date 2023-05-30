@@ -26,12 +26,18 @@ def get_or_create_exam_workspace(exam_name: str):
 def create_exam_project_for_user(
     workspace: sly.api.workspace_api.WorkspaceInfo, user: sly.api.user_api.UserInfo
 ):
-    return g.api.project.create(
+    project = g.api.project.create(
         workspace_id=workspace.id,
         name=f"{workspace.name}. User: {user.name} ({user.email})",
         description="",
         change_name_if_conflict=False,
     )
+    project = g.api.project.get_info_by_id(project.id)
+    custom_data = project.custom_data
+    custom_data["user_id"] = user.id
+    custom_data["user_name"] = user.name
+    g.api.project.update_custom_data(project.id, custom_data)
+    return project
 
 
 def get_or_create_exam_project_for_user(
