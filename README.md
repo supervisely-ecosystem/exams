@@ -15,7 +15,7 @@
 
 ## Overview
 
-This App allows you to create and manage labeling exams. 
+This application allows you to create and manage labeling exams. 
 
 ## How To Run
 
