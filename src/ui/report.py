@@ -505,7 +505,7 @@ def update_report_status(report, attempt):
 def refresh_report(value_dict):
     g.is_refreshing_report = True
 
-    workspace_id = value_dict["report"]["workspace_id"]
+    workspace_id = value_dict["workspace_id"]
     user_id = value_dict["user_id"]
 
     benchmark_dataset = g.exams[workspace_id].benchmark_dataset

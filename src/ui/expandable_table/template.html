@@ -9,8 +9,6 @@
                 <el-table
                     :data="props.row.expandable_content.table_data.data"
                     size="mini"
-                    :value="state.{{{widget.widget_id}}}.selected_row"
-                    @cell-click="state.{{{widget.widget_id}}}.selected_row = $event"
                 >
                     <el-table-column
                         :min-width="30"
@@ -66,7 +64,18 @@
                                     type="text"
                                     {% if widget._refresh_click_handled %}
                                     @click="
-                                        state.{{{widget.widget_id}}}.selected_row = scope.row;
+                                        state.{{{widget.widget_id}}}.selected_row = {
+                                            user_id: scope.row.user_id,
+                                            workspace_id: scope.row.workspace_id,
+                                            project_id: scope.row.project_id,
+                                            user: scope.row.user,
+                                            try: scope.row.try,
+                                            attempts: scope.row.attempts,
+                                            started: scope.row.started,
+                                            status: scope.row.status,
+                                            loading: scope.row.loading,
+                                            passmark: scope.row.passmark
+                                        };
                                         post('/{{{widget.widget_id}}}/refresh_clicked_cb');
                                     "
                                     {% endif %}
@@ -80,7 +89,18 @@
                                     type="text"
                                     {% if widget._view_click_handled %}
                                     @click="
-                                        state.{{{widget.widget_id}}}.selected_row = scope.row;
+                                        state.{{{widget.widget_id}}}.selected_row = {
+                                            user_id: scope.row.user_id,
+                                            workspace_id: scope.row.workspace_id,
+                                            project_id: scope.row.project_id,
+                                            user: scope.row.user,
+                                            try: scope.row.try,
+                                            attempts: scope.row.attempts,
+                                            started: scope.row.started,
+                                            status: scope.row.status,
+                                            loading: scope.row.loading,
+                                            passmark: scope.row.passmark
+                                        };
                                         post('/{{{widget.widget_id}}}/view_clicked_cb');
                                     "
                                     {% endif %}
@@ -93,7 +113,18 @@
                                     type="text"
                                     {% if widget._new_attempt_click_handled %}
                                     @click="
-                                        state.{{{widget.widget_id}}}.selected_row = scope.row;
+                                        state.{{{widget.widget_id}}}.selected_row = {
+                                            user_id: scope.row.user_id,
+                                            workspace_id: scope.row.workspace_id,
+                                            project_id: scope.row.project_id,
+                                            user: scope.row.user,
+                                            try: scope.row.try,
+                                            attempts: scope.row.attempts,
+                                            started: scope.row.started,
+                                            status: scope.row.status,
+                                            loading: scope.row.loading,
+                                            passmark: scope.row.passmark
+                                        };
                                         post('/{{{widget.widget_id}}}/new_attempt_clicked_cb');
                                     "
                                     {% endif %}

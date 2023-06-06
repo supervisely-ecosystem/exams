@@ -38,8 +38,8 @@ def load_dashboard():
 @exams_table.table.view_clicked
 def go_to_report(value_dict):
     report_return_btn.disable()
-    workspace_id = value_dict["report"]["workspace_id"]
-    project_id = value_dict["report"]["project_id"]
+    workspace_id = value_dict["workspace_id"]
+    project_id = value_dict["project_id"]
     user_id = value_dict["user_id"]
 
     dashboard_layout.hide()
@@ -77,7 +77,8 @@ def go_to_report(value_dict):
 
 @exams_table.table.new_attempt_clicked
 def start_new_attempt(value_dict):
-    workspace_id = value_dict["report"]["workspace_id"]
+    exams_table.table.loading = True
+    workspace_id = value_dict["workspace_id"]
     user_id = value_dict["user_id"]
     exam = g.exams[workspace_id]
     attempts = value_dict["try"]
@@ -98,6 +99,7 @@ def start_new_attempt(value_dict):
         attempt_num=attempt.project.custom_data["attempt"] + 1,
     )
     update_exams_table()
+    exams_table.table.loading = False
 
 
 @new_exam_button.click

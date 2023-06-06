@@ -126,10 +126,8 @@ class ExpandableTable(Widget):
                 "attempts": "∞" if exam._attempts is None else exam._attempts,
                 "started": started_at,
                 "status": status,
-                "report": {
-                    "workspace_id": exam._workspace.id,
-                    "project_id": user._exam_project.id,
-                },
+                "workspace_id": exam._workspace.id,
+                "project_id": user._exam_project.id,
                 "loading": False,
                 "passmark": exam._passmark,
             }
@@ -230,11 +228,7 @@ class ExpandableTable(Widget):
                 value_dict: dict = self.get_selected_cell()
                 if value_dict is None:
                     return
-                value_dict_with_loading = value_dict.copy()
-                value_dict_with_loading["loading"] = True
-                self.patch_expandable_row(value_dict, value_dict_with_loading)
                 func(value_dict)
-                self.patch_expandable_row(value_dict_with_loading, value_dict)
             except Exception as e:
                 logger.error(
                     traceback.format_exc(), exc_info=True, extra={"exc_str": str(e)}
@@ -255,11 +249,7 @@ class ExpandableTable(Widget):
                 value_dict = self.get_selected_cell()
                 if value_dict is None:
                     return
-                value_dict_with_loading = value_dict.copy()
-                value_dict_with_loading["loading"] = True
-                self.patch_expandable_row(value_dict, value_dict_with_loading)
                 func(value_dict)
-                self.patch_expandable_row(value_dict_with_loading, value_dict)
             except Exception as e:
                 logger.error(
                     traceback.format_exc(), exc_info=True, extra={"exc_str": str(e)}
@@ -281,11 +271,7 @@ class ExpandableTable(Widget):
                 if value_dict is None:
                     return
                 value_dict: dict
-                value_dict_with_loading = value_dict.copy()
-                value_dict_with_loading["loading"] = True
-                self.patch_expandable_row(value_dict, value_dict_with_loading)
                 func(value_dict)
-                self.patch_expandable_row(value_dict_with_loading, value_dict)
             except Exception as e:
                 logger.error(
                     traceback.format_exc(), exc_info=True, extra={"exc_str": str(e)}
