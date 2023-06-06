@@ -1,147 +1,184 @@
 import copy
 import dateutil.parser
-from supervisely.app.widgets import Text, Container, Button, Empty, Input, Select
+from supervisely.app.widgets import (
+    Text,
+    Container,
+    Button,
+    Input,
+    Select,
+    Card,
+    Flexbox,
+)
 from supervisely.api.labeling_job_api import LabelingJobApi
-from supervisely import ProjectMeta
 
 import src.globals as g
-import src.utils as utils
 from src.ui.expandable_table import ExpandableTable
-from src.ui.report import calculate_report
+from src.ui.report import calculate_report, save_report, update_report_status
 
 
 class ExamsTable:
-
     def __init__(self, expandable_table: ExpandableTable, header: Container):
         self.table = expandable_table
-        self._header = header
-        self._exams = []
-        self._filters = {}
-    
+        self.header = header
+        self.exams_rows = []
+        self.applied_filters = {}
+
+        self._available_filters = {
+            "assignee": ExamsTable.filter_by_assignee,
+            "creator": ExamsTable.filter_by_creator,
+            "status": ExamsTable.filter_by_status,
+        }
+
     def update(self):
         self.table.loading = True
-        self._header.loading = True
-        exams_info = g.load_all_exams()
-        self._exams = [
+        self.header.loading = True
+        exams = g.load_all_exams()
+        self.exams_rows = [
             ExpandableTable.Exam(
-                name=exam_info["workspace_info"].name[7:-1],
-                workspace=exam_info["workspace_info"],
-                benchmark_project=exam_info["benchmark_project"],
-                benchmark_project_meta=exam_info["benchmark_project_meta"],
-                passmark=exam_info["benchmark_project"].custom_data["passmark"],
-                created_at=exam_info["workspace_info"].created_at,
-                created_by=g.api.user.get_info_by_id(exam_info["benchmark_project"].custom_data["created_by"]),
-                attempts=exam_info["benchmark_project"].custom_data["attempts"],
-                classes=exam_info["exam_project_meta"].obj_classes,
-                tags=exam_info["exam_project_meta"].tag_metas,
-                users = [ExpandableTable.ExamUser(
-                    user_name=exam_project.custom_data["user_name"],
-                    user_id=exam_project.custom_data["user_id"],
-                    exam_project=exam_project,
-                    labeling_jobs=utils.get_labeling_jobs(exam_project.id)
-                ) for exam_project in exam_info["exam_projects"]],
-            ) for exam_info in exams_info.values()
+                name=exam.workspace.name[7:-1],
+                workspace=exam.workspace,
+                benchmark_project=exam.benchmark_project,
+                benchmark_project_meta=exam.benchmark_project_meta,
+                passmark=exam.benchmark_project.custom_data["passmark"],
+                created_at=exam.workspace.created_at,
+                created_by=g.api.user.get_info_by_id(
+                    exam.benchmark_project.custom_data["created_by"]
+                ),
+                attempts=exam.benchmark_project.custom_data["attempts"],
+                classes=exam.benchmark_project_meta.obj_classes,
+                tags=exam.benchmark_project_meta.tag_metas,
+                users=[
+                    ExpandableTable.ExamUser(
+                        user_name=user.attempts[0].project.custom_data["user_name"],
+                        user_id=user.user_id,
+                        attempts=len(user.attempts),
+                        exam_project=user.attempts[0].project,
+                        labeling_job=user.attempts[0].labeling_job,
+                    )
+                    for user in exam.users.values()
+                ],
+            )
+            for exam in exams.values()
         ]
-        self.table.set(self._exams)
+        self.table.set(self.exams_rows)
+
         all_users = []
         creators = []
-        for exam in self._exams:
+        for exam in self.exams_rows:
             for user in exam._users:
                 if user._user_id not in [u[0] for u in all_users]:
                     all_users.append((user._user_id, user._user_name))
             if exam._created_by.id not in [c[0] for c in creators]:
                 creators.append((exam._created_by.id, exam._created_by.name))
-
-        filter_by_assignee.set(items=[Select.Item(user[0], user[1]) for user in all_users])
-        filter_by_assignee.set_value([])
-        filter_by_creator.set(items=[Select.Item(creator[0], creator[1]) for creator in creators])
-        filter_by_creator.set_value([])
+        select_filter_by_assignee.set(
+            items=[Select.Item(user[0], user[1]) for user in all_users]
+        )
+        select_filter_by_assignee.set_value([])
+        select_filter_by_creator.set(
+            items=[Select.Item(creator[0], creator[1]) for creator in creators]
+        )
+        select_filter_by_creator.set_value([])
 
         self.table.loading = False
-        self._header.loading = False
+        self.header.loading = False
 
     def search_by_name(self, text: str):
-        self._header.loading = True
+        self.header.loading = True
         self.table.loading = True
-        exams = [exam for exam in self._exams if exam.get_name().find(text) != -1]
+        exams = [exam for exam in self.exams_rows if exam.get_name().find(text) != -1]
         self.table.set(exams)
         self.table.loading = False
-        self._header.loading = False
+        self.header.loading = False
 
     def filter(self):
-        self._header.loading = True
+        self.header.loading = True
         self.table.loading = True
-        exams = self._exams.copy()
-        for filter_name, filter_val in self._filters.items():
-            if len(filter_val) == 0:
-                continue
-            if filter_name == "assignee":
-                filtered_exams = []
-                for exam in exams:
-                    users = []
-                    for user in exam._users:
-                        if user._user_id in filter_val:
-                            users.append(user)
-                    if len(users) != 0:
-                        new_exam = copy.deepcopy(exam)
-                        new_exam._users = users
-                        filtered_exams.append(new_exam)
-                exams = filtered_exams
-            if filter_name == "creator":
-                filtered_exams = []
-                for exam in exams:
-                    if exam._created_by.id in filter_val:
-                        filtered_exams.append(exam)
-                exams = filtered_exams
-            if filter_name == "status":
-                filtered_exams = []
-                for exam in exams:
-                    users = []
-                    for user in exam._users:
-                        last_lj = user._labeling_jobs[0]
-                        status = last_lj.status
-                        exam_score = user._exam_project.custom_data.get("overall_score", None)
-                        last_lj_id = user._exam_project.custom_data.get("last_labeling_job_id", None)
-                        if exam_score is not None and last_lj_id == last_lj.id:
-                            if exam_score*100 > exam._passmark:
-                                status = f"passed"
-                            else:
-                                status = f"failed"
-                    
-                        if status in filter_val:
-                            users.append(user)
-                    if len(users) != 0:
-                        new_exam = copy.deepcopy(exam)
-                        new_exam._users = users
-                        filtered_exams.append(new_exam)
-                exams = filtered_exams    
+        exams = self.exams_rows.copy()
+        for filter_name, filter_val in self.applied_filters.items():
+            exams = self._available_filters[filter_name](exams, filter_val)
         self.table.set(exams)
-        self._header.loading = False
+        self.header.loading = False
         self.table.loading = False
 
     def sort(self, val):
-        self._header.loading = True
+        self.header.loading = True
         self.table.loading = True
 
         key = lambda exam: dateutil.parser.isoparse(exam._created_at.rstrip("Z"))
-        self.table.set(sorted(self.table._exams, key=key, reverse=val=="oldest"))
-        
-        self._header.loading = False
+        self.table.set(sorted(self.table._exams, key=key, reverse=val == "oldest"))
+
+        self.header.loading = False
         self.table.loading = False
 
     def filter_changed(self, key, val):
         if type(val) != list:
             return
-        self._filters[key] = val
+        self.applied_filters[key] = val
         self.filter()
 
-refresh_btn = Button(text="Refresh table", icon="zmdi zmdi-refresh", button_size="mini")
+    @staticmethod
+    def filter_by_assignee(exams, filter_val):
+        if len(filter_val) == 0:
+            return exams
+        filtered_exams = []
+        for exam in exams:
+            users = []
+            for user in exam._users:
+                if user._user_id in filter_val:
+                    users.append(user)
+            if len(users) != 0:
+                new_exam = copy.deepcopy(exam)
+                new_exam._users = users
+                filtered_exams.append(new_exam)
+        return filtered_exams
+
+    @staticmethod
+    def filter_by_creator(exams, filter_val):
+        if len(filter_val) == 0:
+            return exams
+        filtered_exams = []
+        for exam in exams:
+            if exam._created_by.id in filter_val:
+                filtered_exams.append(exam)
+        return filtered_exams
+
+    @staticmethod
+    def filter_by_status(exams, filter_val):
+        if len(filter_val) == 0:
+            return exams
+        filtered_exams = []
+        for exam in exams:
+            users = []
+            for user in exam._users:
+                labeling_job = user._labeling_job
+                status = labeling_job.status
+                exam_score = user._exam_project.custom_data.get("overall_score", None)
+                if exam_score is not None:
+                    if exam_score * 100 > exam._passmark:
+                        status = f"passed"
+                    else:
+                        status = f"failed"
+
+                if status in filter_val:
+                    users.append(user)
+            if len(users) != 0:
+                new_exam = copy.deepcopy(exam)
+                new_exam._users = users
+                filtered_exams.append(new_exam)
+        return filtered_exams
+
+
+refresh_btn = Button(text="", icon="zmdi zmdi-refresh", button_size="mini", icon_gap=0)
 new_exam_button = Button(text="New Exam", icon="zmdi zmdi-plus", button_size="mini")
 search_exam = Input(placeholder="Search by title", size="mini")
 search_btn = Button("", button_size="mini", icon="zmdi zmdi-search", icon_gap=0)
-filter_by_assignee = Select(placeholder="Assignee", items=[], multiple=True, size="mini")
-filter_by_creator = Select(placeholder="Creator", items=[], multiple=True, size="mini")
-filter_by_status = Select(
+select_filter_by_assignee = Select(
+    placeholder="Assignee", items=[], multiple=True, size="mini"
+)
+select_filter_by_creator = Select(
+    placeholder="Creator", items=[], multiple=True, size="mini"
+)
+select_filter_by_status = Select(
     items=[
         Select.Item(str(LabelingJobApi.Status.PENDING), "PENDING"),
         Select.Item(str(LabelingJobApi.Status.IN_PROGRESS), "IN PROGRESS"),
@@ -149,83 +186,103 @@ filter_by_status = Select(
         Select.Item(str(LabelingJobApi.Status.COMPLETED), "COMPLETED"),
         Select.Item(str(LabelingJobApi.Status.STOPPED), "STOPPED"),
         Select.Item("passed", "PASSED"),
-        Select.Item("failed", "FAILED")
+        Select.Item("failed", "FAILED"),
     ],
     placeholder="Status",
     multiple=True,
-    size="mini"
+    size="mini",
 )
-select_sort = Select(items=[Select.Item("newest"), Select.Item("oldest")], placeholder="Sort", size="mini")
-table_header = Container(widgets=[
-    refresh_btn,
-    filter_by_assignee,
-    filter_by_creator,
-    filter_by_status,
-    select_sort,
-    Empty(),
-    Container(widgets=[search_exam, search_btn], direction="horizontal", fractions=[7,1], gap=5),
-    new_exam_button
-], fractions=[2, 2, 2, 2, 2, 7, 3, 2], direction="horizontal", overflow="wrap")
+select_sort = Select(
+    items=[Select.Item("newest"), Select.Item("oldest")],
+    placeholder="Sort",
+    size="mini",
+)
+
+table_header = Card(
+    title="Filters",
+    content=Flexbox(
+        widgets=[
+            select_filter_by_assignee,
+            select_filter_by_creator,
+            select_filter_by_status,
+            select_sort,
+        ]
+    ),
+    content_top_right=Container(
+        widgets=[search_exam, search_btn, new_exam_button],
+        direction="horizontal",
+        fractions=[7, 1, 4],
+        gap=5,
+        overflow="wrap",
+    ),
+)
 exams_table = ExamsTable(ExpandableTable([]), table_header)
-table_and_header = Container(widgets=[table_header, exams_table.table])
+exams_table_card = Card(
+    title="Exams", content=exams_table.table, content_top_right=refresh_btn
+)
+table_and_header = Container(widgets=[table_header, exams_table_card])
 
 
 def update_exams_table():
     exams_table.update()
 
-@exams_table.table.refresh_clicked
+
 def refresh_report(value_dict):
     g.is_refreshing_report = True
 
     workspace_id = value_dict["report"]["workspace_id"]
-    project_id = value_dict["report"]["project_id"]
+    user_id = value_dict["user_id"]
 
-    benchmark_dataset = g.exams[workspace_id]["benchmark_dataset"]
-    exam_dataset = utils.get_dataset_by_project_id(project_id)
-    iou_threshold = g.exams[workspace_id]["benchmark_project"].custom_data["threshold"]
-    pred_project_meta = ProjectMeta.from_json(g.api.project.get_meta(project_id))
+    benchmark_dataset = g.exams[workspace_id].benchmark_dataset
+    attempt = g.exams[workspace_id].users[user_id].attempts[0]
+    iou_threshold = g.exams[workspace_id].benchmark_project.custom_data["threshold"]
+    attempt_project_meta = attempt.project_meta
 
     report = calculate_report(
         benchmark_dataset,
-        exam_dataset,
-        classes_whitelist=[oc.name for oc in pred_project_meta.obj_classes],
-        tags_whitelist=[tm.name for tm in pred_project_meta.tag_metas],
-        obj_tags_whitelist=[tm.name for tm in pred_project_meta.tag_metas],
+        attempt.dataset,
+        classes_whitelist=[oc.name for oc in attempt_project_meta.obj_classes],
+        tags_whitelist=[tm.name for tm in attempt_project_meta.tag_metas],
+        obj_tags_whitelist=[tm.name for tm in attempt_project_meta.tag_metas],
         iou_threshold=iou_threshold,
     )
 
-    utils.save_report(report, workspace_id, project_id)
-    utils.update_report_status(report, project_id)
+    save_report(report, attempt)
+    update_report_status(report, attempt)
     g.is_refreshing_report = False
 
     return report
 
-@filter_by_assignee.value_changed
+
+exams_table.table.refresh_clicked(refresh_report)
+
+
+@select_filter_by_assignee.value_changed
 def filter_by_assignee_func(val):
     exams_table.filter_changed("assignee", val)
 
-@filter_by_creator.value_changed
+
+@select_filter_by_creator.value_changed
 def filter_by_creator_func(val):
     exams_table.filter_changed("creator", val)
 
-@filter_by_status.value_changed
+
+@select_filter_by_status.value_changed
 def filter_by_status_func(val):
     exams_table.filter_changed("status", val)
 
+
 @select_sort.value_changed
-def sort_exams(val):
+def sort_exams_table(val):
     exams_table.sort(val)
+
 
 @search_btn.click
 def filter_table_by_name():
     val = search_exam.get_value()
     exams_table.search_by_name(val)
 
-@refresh_btn.click
-def refresh_exams_table():
-    update_exams_table()
 
-layout = Container(widgets=[
-    Text("<h2>Exams</h2>"),
-    table_and_header
-])
+refresh_btn.click(update_exams_table)
+
+layout = Container(widgets=[Text("<h2>Exams</h2>"), table_and_header])

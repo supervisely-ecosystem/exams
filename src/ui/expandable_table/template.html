@@ -70,6 +70,7 @@
                                         post('/{{{widget.widget_id}}}/refresh_clicked_cb');
                                     "
                                     {% endif %}
+                                    v-show="false"
                                 >
                                     <i class="zmdi zmdi-refresh"></i> UPDATE
                                 </el-button>
@@ -84,7 +85,20 @@
                                     "
                                     {% endif %}
                                 >
-                                    <i class="zmdi zmdi-file-text"></i> VIEW
+                                    <i class="zmdi zmdi-file-text"></i> VIEW REPORT
+                                </el-button>
+                                <el-button
+                                    :disabled="scope.row.attempts !== '∞' && scope.row.try >= scope.row.attempts"
+                                    :loading="scope.row.loading"
+                                    type="text"
+                                    {% if widget._new_attempt_click_handled %}
+                                    @click="
+                                        state.{{{widget.widget_id}}}.selected_row = scope.row;
+                                        post('/{{{widget.widget_id}}}/new_attempt_clicked_cb');
+                                    "
+                                    {% endif %}
+                                >
+                                    <i class="zmdi zmdi-plus"></i> NEW ATTEMPT
                                 </el-button>
                             </div>
                         </template>

@@ -820,7 +820,7 @@ def calculate_exam_report(
         class_matches=class_matches,
         tags_whitelist=tags_whitelist,
         obj_tags_whitelist=obj_tags_whitelist,
-        iou_threshold=iou_threshold
+        iou_threshold=iou_threshold,
     )
     result = ComputeMetrics(request)
     return result.to_json()
