@@ -183,11 +183,12 @@ class ExpandableTable(Widget):
         }
 
     def get_json_data(self):
-        return {"table_data": self._parsed_data, "loading": False}
+        return {"table_data": self._parsed_data}
 
     def get_json_state(self):
         return {
             "selected_row": {},
+            "loading": False,
         }
 
     def clear_selection(self):
@@ -294,9 +295,9 @@ class ExpandableTable(Widget):
 
     @property
     def loading(self):
-        return DataJson()[self.widget_id]["loading"]
+        return StateJson()[self.widget_id]["loading"]
 
     @loading.setter
     def loading(self, value: bool):
-        DataJson()[self.widget_id]["loading"] = value
-        DataJson().send_changes()
+        StateJson()[self.widget_id]["loading"] = value
+        StateJson().send_changes()

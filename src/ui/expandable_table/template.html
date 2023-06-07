@@ -1,6 +1,6 @@
 <el-table
     :data="data.{{{widget.widget_id}}}.table_data.data"
-    v-loading="data.{{{widget.widget_id}}}.loading"
+    v-loading="state.{{{widget.widget_id}}}.loading"
     empty-text="No Exams"
 >
     <el-table-column type="expand">
