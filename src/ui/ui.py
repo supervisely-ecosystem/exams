@@ -78,6 +78,7 @@ def go_to_report(value_dict):
 @exams_table.table.new_attempt_clicked
 def start_new_attempt(value_dict):
     exams_table.table.loading = True
+    exams_table.header.loading = True
     workspace_id = value_dict["workspace_id"]
     user_id = value_dict["user_id"]
     exam = g.exams[workspace_id]
@@ -99,6 +100,7 @@ def start_new_attempt(value_dict):
         attempt_num=attempt.project.custom_data["attempt"] + 1,
     )
     update_exams_table()
+    exams_table.header.loading = False
     exams_table.table.loading = False
 
 

@@ -224,7 +224,7 @@ class ExpandableTable(Widget):
         self._view_click_handled = True
 
         @server.post(route_path)
-        async def _click():
+        def _click():
             try:
                 value_dict: dict = self.get_selected_cell()
                 if value_dict is None:
@@ -245,7 +245,7 @@ class ExpandableTable(Widget):
         self._refresh_click_handled = True
 
         @server.post(route_path)
-        async def _click():
+        def _click():
             try:
                 value_dict = self.get_selected_cell()
                 if value_dict is None:
@@ -266,7 +266,7 @@ class ExpandableTable(Widget):
         self._new_attempt_click_handled = True
 
         @server.post(route_path)
-        async def _click():
+        def _click():
             try:
                 value_dict = self.get_selected_cell()
                 if value_dict is None:
