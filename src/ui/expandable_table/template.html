@@ -113,6 +113,7 @@
                                     type="text"
                                     {% if widget._new_attempt_click_handled %}
                                     @click="
+                                        state.{{{widget.widget_id}}}.loading = true;
                                         state.{{{widget.widget_id}}}.selected_row = {
                                             user_id: scope.row.user_id,
                                             workspace_id: scope.row.workspace_id,
@@ -126,6 +127,7 @@
                                             passmark: scope.row.passmark
                                         };
                                         post('/{{{widget.widget_id}}}/new_attempt_clicked_cb');
+                                        state.{{{widget.widget_id}}}.loading = false;
                                     "
                                     {% endif %}
                                 >
