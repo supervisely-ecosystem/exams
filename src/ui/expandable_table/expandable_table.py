@@ -18,6 +18,7 @@ from supervisely import (
 from supervisely.imaging.color import rgb2hex
 from supervisely.api.labeling_job_api import LabelingJobApi, LabelingJobInfo
 from supervisely.api.user_api import UserInfo
+from supervisely.project.project import Project
 
 LabelingJobStatus = LabelingJobApi.Status
 
@@ -162,7 +163,7 @@ class ExpandableTable(Widget):
                 "assignees": [user._user_name for user in exam._users],
                 "benchmark_project": {
                     "name": exam._benchmark_project.name,
-                    "url": exam._benchmark_project.url,
+                    "url": Project.get_url(exam._benchmark_project.id),
                     "preview_url": exam._benchmark_project.image_preview_url,
                     "description": f"{exam._benchmark_project.items_count} {exam._benchmark_project.type} in project",
                 },
