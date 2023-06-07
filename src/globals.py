@@ -128,6 +128,7 @@ class Exam:
 @sly.timeit
 def load_all_exams():
     global exams
+    exams = {}
     exam_workspaces = [
         ws for ws in api.workspace.get_list(team_id) if ws.name.startswith('Exam: "')
     ]
