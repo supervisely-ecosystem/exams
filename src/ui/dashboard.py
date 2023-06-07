@@ -45,8 +45,8 @@ class ExamsTable:
                     exam.benchmark_project.custom_data["created_by"]
                 ),
                 attempts=exam.benchmark_project.custom_data["attempts"],
-                classes=exam.benchmark_project_meta.obj_classes,
-                tags=exam.benchmark_project_meta.tag_metas,
+                classes=exam.exam_project_meta.obj_classes,
+                tags=exam.exam_project_meta.tag_metas,
                 users=[
                     ExpandableTable.ExamUser(
                         user_name=user.attempts[0].project.custom_data["user_name"],
