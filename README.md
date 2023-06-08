@@ -32,7 +32,7 @@ Once the app is started, new task appear in workspace tasks. Wait for the messag
 
 After you open the app you will see a table with all created exams.
 
-<p align="center"><img src="https://github.com/supervisely-ecosystem/exams/assets/61844772/ef696b96-4152-459e-a7f7-693cef6654d0" width="600"/></p>
+<p align="center"><img src="https://github.com/supervisely-ecosystem/exams/assets/61844772/ef696b96-4152-459e-a7f7-693cef6654d0" /></p>
 
 
 # App features
@@ -41,13 +41,13 @@ After you open the app you will see a table with all created exams.
 
 You can create a new exam by pressing `Create Exam` button. You will see a form where you can specify the name of the exam, select a benchmark dataset, classes and tags to annotate and other parameters and assign a person. After you press `Create` button, the exam will be created and you will be redirected to the exam page. When the exam is created, a labeling job for each user will be created.
 
-<p align="center"><img src="https://github.com/supervisely-ecosystem/exams/assets/61844772/7448d8f2-4f17-45d3-be56-eab0e07f954a" width="600"/></p>
+<p align="center"><img src="https://github.com/supervisely-ecosystem/exams/assets/61844772/7448d8f2-4f17-45d3-be56-eab0e07f954a" /></p>
 
 ### **See a report**
 
 You can see a report for the exam results of any person by pressing the "show report" button in the table.
 
-<p align="center"><img src="https://github.com/supervisely-ecosystem/exams/assets/61844772/18662770-b37c-41cf-b983-6ff7d6a8fa74" width="600"/></p>
+<p align="center"><img src="https://github.com/supervisely-ecosystem/exams/assets/61844772/18662770-b37c-41cf-b983-6ff7d6a8fa74" /></p>
 
 
 ### **Start new attempt**
