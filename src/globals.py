@@ -69,7 +69,6 @@ class Exam:
         )
         self.users = {user.user_id: user for user in users}
         self.exam_project_meta = list(self.users.values())[0].attempts[0].project_meta
-        
 
     @classmethod
     def load_from_workspace(cls, workspace: sly.WorkspaceInfo):

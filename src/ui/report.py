@@ -206,7 +206,7 @@ def get_obj_count_per_class_row(result, class_name):
         str(num_objects_gt),
         str(num_objects_pred),
         f"{int(matches_recall_percent*num_objects_gt)} of {num_objects_gt} ({round(matches_recall_percent*100, 2)}%)",
-        f"{int(matches_precision_percent*num_objects_gt)} of {num_objects_gt} ({round(matches_precision_percent*100, 2)}%)",
+        f"{int(matches_precision_percent*num_objects_pred)} of {num_objects_pred} ({round(matches_precision_percent*100, 2)}%)",
         f"{round(matches_f_measure*100, 2)}%",
     ]
 
@@ -277,7 +277,7 @@ def get_tags_stat_table_row(result, tag_name):
         tag_name,
         total_gt,
         total_pred,
-        f"{int(precision*total_gt)} of {total_gt} ({round(precision*100, 2)}%)",
+        f"{int(precision*total_pred)} of {total_pred} ({round(precision*100, 2)}%)",
         f"{int(recall*total_gt)} of {total_gt} ({round(recall*100, 2)}%)",
         f"{round(f1*100, 2)}%",
     ]
@@ -305,24 +305,22 @@ def get_report_per_image_row(result, image_name, image_id):
     geometry_score = 0
     overall_score = 0
     for data in result:
-        if data["image_gt_id"] == image_id:
-            if data["metric_name"] == "matches-f1" and data["class_gt"] == "":
+        if (
+            data["image_gt_id"] == image_id
+            and data["class_gt"] == ""
+            and data["tag_name"] == ""
+        ):
+            if data["metric_name"] == "matches-f1":
                 objects_score = data["value"]
-            if (
-                data["metric_name"] == "matches-false-negative"
-                and data["class_gt"] == ""
-            ):
+            if data["metric_name"] == "matches-false-negative":
                 objects_missing = data["value"]
-            if (
-                data["metric_name"] == "matches-false-positive"
-                and data["class_gt"] == ""
-            ):
+            if data["metric_name"] == "matches-false-positive":
                 obj_false_positive = data["value"]
-            if data["metric_name"] == "tags-f1" and data["tag_name"] == "":
+            if data["metric_name"] == "tags-f1":
                 tag_score = data["value"]
-            if data["metric_name"] == "tags-false-negative" and data["tag_name"] == "":
+            if data["metric_name"] == "tags-false-negative":
                 tag_missing = data["value"]
-            if data["metric_name"] == "tags-false-positive" and data["tag_name"] == "":
+            if data["metric_name"] == "tags-false-positive":
                 tag_false_positive = data["value"]
             if data["metric_name"] == "iou":
                 geometry_score = data["value"]
