@@ -77,12 +77,14 @@ class ExpandableTable(Widget):
             self,
             user_name: str,
             user_id: int,
+            user_login: str,
             attempts: int,
             exam_project: ProjectInfo,
             labeling_job: LabelingJobInfo,
         ) -> None:
             self._user_name = user_name
             self._user_id = user_id
+            self._user_login = user_login
             self._attempts = attempts
             self._exam_project = exam_project
             self._labeling_job = labeling_job
@@ -123,6 +125,7 @@ class ExpandableTable(Widget):
             return {
                 "user_id": user._user_id,
                 "user": user._user_name,
+                "user_login": user._user_login,
                 "try": user._attempts,
                 "attempts": "∞" if exam._attempts is None else exam._attempts,
                 "started": started_at,

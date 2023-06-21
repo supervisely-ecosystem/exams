@@ -72,7 +72,7 @@ becnhmark_project = Card(
     ),
 )
 select_users = Select(
-    items=[Select.Item(user.id, user.name) for user in g.users],
+    items=[Select.Item(user.id, user.login) for user in g.users],
     multiple=True,
     size="small",
 )
@@ -82,7 +82,7 @@ assigned_users = Card(
     content=Field(title="Assign to", content=select_users),
 )
 select_reviewer = Select(
-    items=[Select.Item(user.id, user.name) for user in g.users],
+    items=[Select.Item(user.id, user.login) for user in g.users],
     size="small",
 )
 reviewers = Card(
@@ -243,6 +243,7 @@ def create_exam_project_for_user(
     custom_data = project.custom_data
     custom_data["user_id"] = user.id
     custom_data["user_name"] = user.name
+    custom_data["user_login"] = user.login
     custom_data["attempt"] = attempt
     custom_data["reviewer_id"] = reviewer
     g.api.project.update_custom_data(project.id, custom_data)
