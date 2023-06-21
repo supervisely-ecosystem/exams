@@ -18,6 +18,7 @@ from supervisely import (
 from supervisely.imaging.color import rgb2hex
 from supervisely.api.labeling_job_api import LabelingJobApi, LabelingJobInfo
 from supervisely.api.user_api import UserInfo
+from supervisely.project.project import Project
 
 LabelingJobStatus = LabelingJobApi.Status
 
@@ -76,12 +77,14 @@ class ExpandableTable(Widget):
             self,
             user_name: str,
             user_id: int,
+            user_login: str,
             attempts: int,
             exam_project: ProjectInfo,
             labeling_job: LabelingJobInfo,
         ) -> None:
             self._user_name = user_name
             self._user_id = user_id
+            self._user_login = user_login
             self._attempts = attempts
             self._exam_project = exam_project
             self._labeling_job = labeling_job
@@ -122,6 +125,7 @@ class ExpandableTable(Widget):
             return {
                 "user_id": user._user_id,
                 "user": user._user_name,
+                "user_login": user._user_login,
                 "try": user._attempts,
                 "attempts": "∞" if exam._attempts is None else exam._attempts,
                 "started": started_at,
@@ -162,7 +166,7 @@ class ExpandableTable(Widget):
                 "assignees": [user._user_name for user in exam._users],
                 "benchmark_project": {
                     "name": exam._benchmark_project.name,
-                    "url": exam._benchmark_project.url,
+                    "url": Project.get_url(exam._benchmark_project.id),
                     "preview_url": exam._benchmark_project.image_preview_url,
                     "description": f"{exam._benchmark_project.items_count} {exam._benchmark_project.type} in project",
                 },
@@ -224,7 +228,7 @@ class ExpandableTable(Widget):
         self._view_click_handled = True
 
         @server.post(route_path)
-        async def _click():
+        def _click():
             try:
                 value_dict: dict = self.get_selected_cell()
                 if value_dict is None:
@@ -245,7 +249,7 @@ class ExpandableTable(Widget):
         self._refresh_click_handled = True
 
         @server.post(route_path)
-        async def _click():
+        def _click():
             try:
                 value_dict = self.get_selected_cell()
                 if value_dict is None:
@@ -266,7 +270,7 @@ class ExpandableTable(Widget):
         self._new_attempt_click_handled = True
 
         @server.post(route_path)
-        async def _click():
+        def _click():
             try:
                 value_dict = self.get_selected_cell()
                 if value_dict is None:

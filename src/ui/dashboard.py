@@ -16,6 +16,18 @@ from src.ui.expandable_table import ExpandableTable
 from src.ui.report import calculate_report, save_report, update_report_status
 
 
+def get_user_login(user: g.Exam.ExamUser):
+    try:
+        return user.attempts[0].project.custom_data.get["user_login"]
+    except:
+        return g.api.user.get_info_by_id(user.user_id).login
+    
+def get_user_name(user: g.Exam.ExamUser):
+    try:
+        return user.attempts[0].project.custom_data.get["user_name"]
+    except:
+        return g.api.user.get_info_by_id(user.user_id).name
+
 class ExamsTable:
     def __init__(self, expandable_table: ExpandableTable, header: Container):
         self.table = expandable_table
@@ -45,12 +57,13 @@ class ExamsTable:
                     exam.benchmark_project.custom_data["created_by"]
                 ),
                 attempts=exam.benchmark_project.custom_data["attempts"],
-                classes=exam.benchmark_project_meta.obj_classes,
-                tags=exam.benchmark_project_meta.tag_metas,
+                classes=exam.exam_project_meta.obj_classes,
+                tags=exam.exam_project_meta.tag_metas,
                 users=[
                     ExpandableTable.ExamUser(
-                        user_name=user.attempts[0].project.custom_data["user_name"],
+                        user_name=get_user_name(user),
                         user_id=user.user_id,
+                        user_login=get_user_login(user),
                         attempts=len(user.attempts),
                         exam_project=user.attempts[0].project,
                         labeling_job=user.attempts[0].labeling_job,
