@@ -369,7 +369,7 @@ def create_exam():
         exam_workspace.id,
         f"{exam_workspace.name}. Benchmark project",
     )
-    g.api.task.wait(copy_project_task_id, g.api.task.Status.FINISHED, 3)
+    g.api.task.wait(copy_project_task_id, g.api.task.Status.FINISHED)
 
     benchmark_project = g.api.project.get_info_by_name(
         exam_workspace.id, f"{exam_workspace.name}. Benchmark project"
