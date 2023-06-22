@@ -26,7 +26,7 @@ import src.globals as g
 
 title_input = Input(size="small")
 exam_title = Field(title="Exam Title", content=title_input)
-select_dataset = SelectDataset(size="small")
+select_dataset = SelectDataset(size="small", allowed_project_types=[sly.ProjectType.IMAGES])
 select_classes = Select(items=[], multiple=True, size="small")
 select_all_classes_btn = Button(
     text="Select all", button_type="text", button_size="mini"
@@ -306,8 +306,14 @@ def delete_attempt(attempt: g.Exam.ExamUser.Attempt):
 
 
 def create_exam():
-    status_bar.show()
     exam_name = title_input.get_value()
+    if exam_name.isspace() or exam_name == "":
+        sly.app.show_dialog(
+            "Name not specified",
+            "Name not specified. Please provide a name for the Exam",
+            status="warning",
+        )
+        return False
     source_dataset_id = select_dataset.get_selected_id()
     classes_whitelist = select_classes.get_value()
     tags_whitelist = select_tags.get_value()
@@ -329,7 +335,6 @@ def create_exam():
         else input_attempts.get_value()
     )
     show_report_to_labelers = show_report_to_labelers_checkmark.is_checked()
-    progress = status_bar(iterable=[step for step in range(100)])
 
     if g.api.workspace.exists(g.team_id, f'Exam: "{exam_name}"'):
         sly.app.show_dialog(
@@ -354,7 +359,10 @@ def create_exam():
             "warning",
         )
         return False
-
+    
+    status_bar.show()
+    progress = status_bar(iterable=[step for step in range(100)])
+    
     # create workspace
     exam_workspace = create_exam_workspace(exam_name)
     progress.update(100 // (2 + len(users)))
