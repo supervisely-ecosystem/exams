@@ -2,6 +2,7 @@
     "version": "2.0.0",
     "name": "Labeling exams",
     "description": "App for creating and managing annotation exams",
+    "docker_image": "supervisely/base-py-sdk:6.72.70",
     "entrypoint": "python -m uvicorn src.main:app --host 0.0.0.0 --port 8000",
     "headless": false,
     "icon": "https://github.com/supervisely-ecosystem/exams/assets/119248312/ff4e9839-ed2f-43c9-be68-7bbbba3055b4",
