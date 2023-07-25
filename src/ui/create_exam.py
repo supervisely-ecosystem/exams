@@ -72,7 +72,7 @@ becnhmark_project = Card(
     ),
 )
 select_users = Select(
-    items=[Select.Item(user.id, user.login) for user in g.users],
+    items=[Select.Item(user.id, user.login) for user in g.users.values()],
     multiple=True,
     size="small",
 )
@@ -82,7 +82,7 @@ assigned_users = Card(
     content=Field(title="Assign to", content=select_users),
 )
 select_reviewer = Select(
-    items=[Select.Item(user.id, user.login) for user in g.users],
+    items=[Select.Item(user.id, user.login) for user in g.users.values()],
     size="small",
 )
 reviewers = Card(
@@ -280,7 +280,7 @@ def create_attempt(
     reviewer,
     attempt_num,
 ):
-    user_info = g.api.user.get_info_by_id(user_id)
+    user_info = g.users.get(user_id)
     exam_project = create_exam_project_for_user(
         workspace, user_info, attempt_num, reviewer
     )

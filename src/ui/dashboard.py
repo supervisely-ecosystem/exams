@@ -20,13 +20,13 @@ def get_user_login(user: g.Exam.ExamUser):
     try:
         return user.attempts[0].project.custom_data.get["user_login"]
     except:
-        return g.api.user.get_info_by_id(user.user_id).login
+        return g.users.get(user.user_id).login
     
 def get_user_name(user: g.Exam.ExamUser):
     try:
         return user.attempts[0].project.custom_data.get["user_name"]
     except:
-        return g.api.user.get_info_by_id(user.user_id).name
+        return g.users.get(user.user_id).name
 
 class ExamsTable:
     def __init__(self, expandable_table: ExpandableTable, header: Container):
@@ -53,7 +53,7 @@ class ExamsTable:
                 benchmark_project_meta=exam.benchmark_project_meta,
                 passmark=exam.benchmark_project.custom_data["passmark"],
                 created_at=exam.workspace.created_at,
-                created_by=g.api.user.get_info_by_id(
+                created_by=g.users.get(
                     exam.benchmark_project.custom_data["created_by"]
                 ),
                 attempts=exam.benchmark_project.custom_data["attempts"],

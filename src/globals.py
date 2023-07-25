@@ -14,7 +14,7 @@ user_id = sly.env.user_id()
 
 api = sly.Api()
 
-users = api.user.get_team_members(team_id)
+users = {user.id: user for user in api.user.get_team_members(team_id)}
 is_refreshing_report = False
 exams = {}
 
