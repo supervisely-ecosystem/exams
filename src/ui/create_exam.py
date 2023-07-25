@@ -74,6 +74,7 @@ becnhmark_project = Card(
 select_users = Select(
     items=[Select.Item(user.id, user.login) for user in g.users.values()],
     multiple=True,
+    filterable=True,
     size="small",
 )
 assigned_users = Card(
@@ -83,6 +84,7 @@ assigned_users = Card(
 )
 select_reviewer = Select(
     items=[Select.Item(user.id, user.login) for user in g.users.values()],
+    filterable=True,
     size="small",
 )
 reviewers = Card(
