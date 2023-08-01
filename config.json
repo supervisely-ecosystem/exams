@@ -10,5 +10,6 @@
     "poster": "https://github.com/supervisely-ecosystem/exams/assets/119248312/66273639-3ace-4fa8-b780-2ba2cc9f3375",
     "categories": [
         "collaboration"
-    ]
+    ],
+    "min_instance_version": "6.8.11"
 }
