@@ -22,6 +22,8 @@ from supervisely.app.widgets import (
 import supervisely as sly
 
 import src.globals as g
+from src.exam import Exam
+from src.constants import DEFAULT_EXAM_PASSMARK, DEFAULT_MATCHING_THRESHOLD
 
 
 title_input = Input(size="small")
@@ -119,8 +121,8 @@ exam_guide_select = Select(
     ]
 )
 exam_guide_one_of = OneOf(exam_guide_select)
-input_passmark = InputNumber(min=0, max=100, step=1, value=90, size="small")
-matching_threshold = InputNumber(min=0, max=100, step=1, value=80, size="small")
+input_passmark = InputNumber(min=0, max=100, step=1, value=DEFAULT_EXAM_PASSMARK, size="small")
+matching_threshold = InputNumber(min=0, max=100, step=1, value=DEFAULT_MATCHING_THRESHOLD, size="small")
 input_attempts = InputNumber(min=0, max=100, step=1, value=1, size="small")
 maximum_attempts = RadioGroup(
     items=[
@@ -229,7 +231,7 @@ def create_labeling_job(
     )
 
 
-def create_exam_project_for_user(
+def create_attempt_project_for_user(
     workspace: sly.api.workspace_api.WorkspaceInfo,
     user: sly.api.user_api.UserInfo,
     attempt: int,
@@ -243,6 +245,7 @@ def create_exam_project_for_user(
     )
     project = g.api.project.get_info_by_id(project.id)
     custom_data = project.custom_data
+    custom_data["is_attempt_project"] = True
     custom_data["user_id"] = user.id
     custom_data["user_name"] = user.name
     custom_data["user_login"] = user.login
@@ -283,17 +286,21 @@ def create_attempt(
     attempt_num,
 ):
     user_info = g.users.get(user_id)
-    exam_project = create_exam_project_for_user(
+    attempt_project = create_attempt_project_for_user(
         workspace, user_info, attempt_num, reviewer
     )
-    exam_project_meta = create_project_meta(benchmark_project_meta, classes, tags)
-    g.api.project.update_meta(exam_project.id, exam_project_meta.to_json())
-    exam_dataset = g.api.dataset.copy(
-        exam_project.id, benchmark_dataset.id, new_name=benchmark_dataset.name
+    attempt_project_meta = create_project_meta(
+        benchmark_project_meta,
+        classes,
+        tags
+    )
+    g.api.project.update_meta(attempt_project.id, attempt_project_meta)
+    attempt_dataset = g.api.dataset.copy(
+        attempt_project.id, benchmark_dataset.id, new_name=benchmark_dataset.name
     )
     labeling_job = create_labeling_job(
-        project=exam_project,
-        dataset=exam_dataset,
+        project=attempt_project,
+        dataset=attempt_dataset,
         user_ids=[user_id],
         readme=guide,
         description="",
@@ -303,7 +310,7 @@ def create_attempt(
     )
 
 
-def delete_attempt(attempt: g.Exam.ExamUser.Attempt):
+def delete_attempt(attempt: Exam.ExamUser.Attempt):
     g.api.labeling_job.archive(attempt.labeling_job.id)
 
 
@@ -390,6 +397,7 @@ def create_exam():
 
     # add exam settings to becnhmark project custom data
     benchmark_project_custom_data = {
+        "is_benchmark_project": True,
         "source_project_id": source_dataset_info.project_id,
         "source_dataset_id": source_dataset_id,
         "benchmark_dataset_id": benchmark_dataset.id,
@@ -439,8 +447,8 @@ def clean_up():
     select_tags.set_value([])
     select_users.set_value([])
     guide_editor.set_text("")
-    input_passmark.value = 90
-    matching_threshold.value = 80
+    input_passmark.value = DEFAULT_EXAM_PASSMARK
+    matching_threshold.value = DEFAULT_MATCHING_THRESHOLD
 
 
 @select_dataset.value_changed

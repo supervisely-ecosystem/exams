@@ -79,14 +79,14 @@ class ExpandableTable(Widget):
             user_id: int,
             user_login: str,
             attempts: int,
-            exam_project: ProjectInfo,
+            attempt_project: ProjectInfo,
             labeling_job: LabelingJobInfo,
         ) -> None:
             self._user_name = user_name
             self._user_id = user_id
             self._user_login = user_login
             self._attempts = attempts
-            self._exam_project = exam_project
+            self._attempt_project = attempt_project
             self._labeling_job = labeling_job
 
     def __init__(
@@ -115,7 +115,7 @@ class ExpandableTable(Widget):
             started_at = user._labeling_job.started_at
             status = STATUS_TEXT[user._labeling_job.status]
 
-            exam_score = user._exam_project.custom_data.get("overall_score", None)
+            exam_score = user._attempt_project.custom_data.get("overall_score", None)
             if exam_score is not None:
                 if exam_score * 100 > exam._passmark:
                     status = f"PASSED ({round(exam_score*100, 2)}%)"
@@ -131,7 +131,7 @@ class ExpandableTable(Widget):
                 "started": started_at,
                 "status": status,
                 "workspace_id": exam._workspace.id,
-                "project_id": user._exam_project.id,
+                "project_id": user._attempt_project.id,
                 "loading": False,
                 "passmark": exam._passmark,
             }

@@ -1,10 +1,8 @@
-from supervisely.app.widgets import Container
-import supervisely as sly
+from supervisely.app.widgets import OneOf, Select
 import src.globals as g
 from src.ui.dashboard import (
     layout as dashboard_layout,
     exams_table,
-    new_exam_button,
     update_exams_table,
 )
 from src.ui.create_exam import (
@@ -26,12 +24,24 @@ from src.ui.report import (
     render_report,
     clean_up as report_clean_up,
 )
+from src.exam import Exam
+
+
+DASHBOARD = "dashboard"
+CREATE_EXAM = "create_exam"
+REPORT = "report"
+
+pages = [
+    Select.Item(value=DASHBOARD, label="Dashboard", content=dashboard_layout),
+    Select.Item(value=CREATE_EXAM, label="Create Exam", content=create_exam_layout),
+    Select.Item(value=REPORT, label="Report", content=report_layout),
+]
+select_page = Select(items=pages)
+current_page = OneOf(select_page)
 
 
 def load_dashboard():
-    create_exam_layout.hide()
-    report_layout.hide()
-    dashboard_layout.show()
+    select_page.set_value(DASHBOARD)
     update_exams_table()
 
 
@@ -42,34 +52,22 @@ def go_to_report(value_dict):
     project_id = value_dict["project_id"]
     user_id = value_dict["user_id"]
 
-    dashboard_layout.hide()
-    create_exam_layout.hide()
-    report_layout.show()
+    select_page.set_value(REPORT)
     report_results.loading = True
 
     report = get_report(workspace_id, project_id)
     if report is None:
         report = refresh_report(value_dict)
 
-    pred_project_meta = g.exams[workspace_id].users[user_id].attempts[0].project_meta
-    iou_threshold = g.exams[workspace_id].benchmark_project.custom_data["threshold"]
-    benchmark_project = g.exams[workspace_id].benchmark_project
-    benchmark_dataset = g.exams[workspace_id].benchmark_dataset
-    exam_project = g.exams[workspace_id].users[user_id].attempts[0].project
-    exam_dataset = g.exams[workspace_id].users[user_id].attempts[0].dataset
-    user_name = exam_project.custom_data.get("user_name", None)
-
+    exam = g.exams[workspace_id]
+    user = exam.get_user(user_id)
+    attempt = user.get_last_attempt()
+    
     render_report(
-        report=report,
-        benchmark_project=benchmark_project,
-        benchmark_dataset=benchmark_dataset,
-        exam_project=exam_project,
-        exam_dataset=exam_dataset,
-        classes=[oc.name for oc in pred_project_meta.obj_classes],
-        tags=[tm.name for tm in pred_project_meta.tag_metas],
-        passmark=value_dict["passmark"],
-        iou_threshold=iou_threshold,
-        user_name=user_name,
+        report,
+        exam,
+        user,
+        attempt
     )
     report_results.loading = False
     report_return_btn.enable()
@@ -81,40 +79,38 @@ def start_new_attempt(value_dict):
     exams_table.header.loading = True
     workspace_id = value_dict["workspace_id"]
     user_id = value_dict["user_id"]
-    exam = g.exams[workspace_id]
     attempts = value_dict["try"]
-    max_attempts = exam.benchmark_project.custom_data["attempts"]
+    exam = g.exams[workspace_id]
+    exam: Exam
+    max_attempts = exam.max_attempts()
     if max_attempts is not None and attempts >= max_attempts:
         return
-    attempt = exam.users[user_id].attempts[0]
-    delete_attempt(attempt)
+    user = exam.get_user(user_id)
+    attempt = user.get_last_attempt()
     create_attempt(
         workspace=exam.workspace,
         user_id=user_id,
         benchmark_project_meta=exam.benchmark_project_meta,
         benchmark_dataset=attempt.dataset,
-        classes=[oc.name for oc in exam.benchmark_project_meta.obj_classes],
-        tags=[tm.name for tm in exam.benchmark_project_meta.tag_metas],
+        classes=[oc.name for oc in attempt.project_meta.obj_classes],
+        tags=[tm.name for tm in attempt.project_meta.tag_metas],
         guide=attempt.labeling_job.readme,
-        reviewer=attempt.project.custom_data["reviewer_id"],
-        attempt_num=attempt.project.custom_data["attempt"] + 1,
+        reviewer=exam.reviewer_id(),
+        attempt_num=attempt.number() + 1,
     )
+    delete_attempt(attempt)
     update_exams_table()
     exams_table.header.loading = False
     exams_table.table.loading = False
 
 
-@new_exam_button.click
+@exams_table.new_exam_button.click
 def go_to_create_exam():
-    dashboard_layout.hide()
-    report_layout.hide()
-    create_exam_layout.show()
+    select_page.set_value(CREATE_EXAM)
 
 
 def go_to_dashboard():
-    report_layout.hide()
-    create_exam_layout.hide()
-    dashboard_layout.show()
+    select_page.set_value(DASHBOARD)
     create_exam_clean_up()
 
 
@@ -135,4 +131,4 @@ def return_from_report_to_dashboard():
     report_clean_up()
 
 
-layout = Container(widgets=[dashboard_layout, create_exam_layout, report_layout])
+layout = current_page

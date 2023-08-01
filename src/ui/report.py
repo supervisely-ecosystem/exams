@@ -1,6 +1,7 @@
 import json
 import time
 import supervisely as sly
+from supervisely.app import DataJson
 from supervisely.app.widgets import (
     Container,
     Text,
@@ -12,10 +13,10 @@ from supervisely.app.widgets import (
     Table,
     GridGallery,
 )
-import src.globals as g
-from src.exam import calculate_exam_report
 
-from supervisely.app import DataJson
+import src.globals as g
+from src.metrics import calculate_exam_report
+from src.exam import Exam
 
 
 gt_imgs = []
@@ -383,82 +384,114 @@ def clean_up():
     status.set("-", status="text")
 
 
-def get_diff_project(exam_project: sly.ProjectInfo):
+def get_diff_project(attempt_project: sly.ProjectInfo):
     diff_project = g.api.project.get_info_by_name(
-        exam_project.workspace_id, f"{exam_project.name}_DIFF"
+        attempt_project.workspace_id, f"{attempt_project.name}_DIFF"
     )
-    if diff_project is None:
-        return None, None
-    diff_dataset = g.api.dataset.get_list(diff_project.id)[0]
-    return diff_project, diff_dataset
+    return diff_project
 
 
-def create_diff_project(exam_project: sly.ProjectInfo, exam_dataset: sly.DatasetInfo):
+def get_diff_dataset(diff_project: sly.ProjectInfo):
+    try:
+        return g.api.dataset.get_list(diff_project.id)[0]
+    except IndexError:
+        return None
+
+
+def create_diff_project(attempt_project: sly.ProjectInfo, attempt_meta: sly.ProjectMeta):
     # create diff project
-    project_diff_info = g.api.project.create(
-        workspace_id=exam_project.workspace_id,
-        name=exam_project.name + "_DIFF",
-        type=exam_project.type,
+    diff_project = g.api.project.create(
+        workspace_id=attempt_project.workspace_id,
+        name=attempt_project.name + "_DIFF",
+        type=attempt_project.type,
         description="",
         change_name_if_conflict=True,
     )
 
     # upload custom_data
     g.api.project.update_custom_data(
-        project_diff_info.id, {"exam_project_id": exam_project.id}
+        diff_project.id, {"attempt_project_id": attempt_project.id}
     )
 
     # upload diff project meta
-    g.api.project.merge_metas(exam_project.id, project_diff_info.id)
+    diff_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
+    diff_meta = attempt_meta.add_obj_class(diff_obj_class)
+    g.api.project.update_meta(diff_project.id, diff_meta)
 
-    # create diff dataset
-    dataset_diff_info = g.api.dataset.create(project_diff_info.id, exam_dataset.name)
+    return diff_project, diff_meta
 
-    # upload diff images
-    imgs = g.api.image.get_list(exam_dataset.id)
+
+def create_diff_dataset(diff_project: sly.ProjectInfo, attempt_dataset: sly.DatasetInfo):
+    diff_dataset = g.api.dataset.create(diff_project.id, attempt_dataset.name)
+    imgs = g.api.image.get_list(attempt_dataset.id)
     img_ids, img_names = zip(*[(img.id, img.name) for img in imgs])
-    g.api.image.upload_ids(dataset_diff_info.id, img_names, img_ids)
+    g.api.image.upload_ids(diff_dataset.id, img_names, img_ids)
 
-    return project_diff_info, dataset_diff_info
+    return diff_dataset
 
 
-def get_or_create_diff_project(
-    exam_project: sly.ProjectInfo, exam_dataset: sly.DatasetInfo
-):
-    diff_project, diff_dataset = get_diff_project(exam_project)
-    if diff_project is None or diff_dataset is None:
-        return create_diff_project(exam_project, exam_dataset)
-    return diff_project, diff_dataset
+def get_or_create_diff_project(attempt_project: sly.ProjectInfo, attempt_meta: sly.ProjectMeta):
+    diff_project = get_diff_project(attempt_project)
+    if diff_project is None:
+        return create_diff_project(attempt_project, attempt_meta)
+    diff_meta = sly.ProjectMeta.from_json(g.api.project.get_meta(diff_project.id))
+    return diff_project, diff_meta
+
+
+def get_or_create_diff_dataset(diff_project: sly.ProjectInfo, attempt_dataset: sly.DatasetInfo):
+    diff_dataset = get_diff_dataset(diff_project)
+    if diff_dataset is None:
+        diff_dataset = create_diff_dataset(diff_project, attempt_dataset)
+    return diff_dataset
+
+
+def get_img_infos(dataset: sly.DatasetInfo):
+    return sorted(g.api.image.get_list(dataset.id), key=lambda x: x.id)
+
+
+def get_ann_infos(dataset: sly.DatasetInfo):
+    return sorted(g.api.annotation.get_list(dataset.id), key=lambda x: x.image_id)
 
 
 @sly.timeit
 def calculate_report(
-    benchmark_dataset,
-    exam_project,
-    exam_dataset,
-    classes_whitelist,
-    tags_whitelist,
-    obj_tags_whitelist,
-    iou_threshold,
+    exam: Exam,
+    attempt: Exam.ExamUser.Attempt
 ):
     return_button.disable()
-    class_matches = [{"class_gt": v, "class_pred": v} for v in classes_whitelist]
-    diff_project, diff_dataset = get_or_create_diff_project(exam_project, exam_dataset)
-
-    report = calculate_exam_report(
-        server_address=g.server_address,
-        api_token=g.api_token,
-        project_gt_id=benchmark_dataset.project_id,
-        dataset_gt_id=benchmark_dataset.id,
-        project_pred_id=exam_dataset.project_id,
-        dataset_pred_id=exam_dataset.id,
-        project_dest_id=diff_project.id,
-        dataset_dest_id=diff_dataset.id,
-        class_matches=class_matches,
-        tags_whitelist=tags_whitelist,
-        obj_tags_whitelist=obj_tags_whitelist,
-        iou_threshold=iou_threshold / 100,
+    class_mapping = {obj_class.name: obj_class.name for obj_class in attempt.project_meta.obj_classes}
+    report, diffs = calculate_exam_report(
+        united_meta=attempt.project_meta,
+        img_infos_gt=get_img_infos(exam.benchmark_dataset),
+        img_infos_pred=get_img_infos(attempt.dataset),
+        ann_infos_gt=get_ann_infos(exam.benchmark_dataset),
+        ann_infos_pred=get_ann_infos(attempt.dataset),
+        class_mapping=class_mapping,
+        tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
+        obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
+        iou_threshold=exam.iou_threshold() / 100,
     )
+
+    # upload diff annotations
+    diff_project, diff_meta = get_or_create_diff_project(attempt.project, exam.attempt_project_meta)
+    diff_dataset = get_or_create_diff_dataset(diff_project, attempt.dataset)
+    error_obj_class = diff_meta.obj_classes.get("Error")
+    for batch in sly.batched(list(zip(diffs, get_img_infos(diff_dataset)))):
+        anns = []
+        img_ids = []
+        for diff, diff_img in batch:
+            if diff is None:
+                continue
+            anns.append(sly.Annotation(
+                img_size=(diff_img.height, diff_img.width),
+                labels=[sly.Label(
+                    geometry=diff,
+                    obj_class=error_obj_class,
+                )]
+            ))
+            img_ids.append(diff_img.id)
+        g.api.annotation.upload_anns(img_ids, anns)
+
     return_button.enable()
 
     return report
@@ -506,19 +539,12 @@ def refresh_report(value_dict):
     workspace_id = value_dict["workspace_id"]
     user_id = value_dict["user_id"]
 
-    benchmark_dataset = g.exams[workspace_id].benchmark_dataset
-    attempt = g.exams[workspace_id].users[user_id].attempts[0]
-    iou_threshold = g.exams[workspace_id].benchmark_project.custom_data["threshold"]
-    attempt_project_meta = attempt.project_meta
+    exam = g.exams[workspace_id]
+    attempt = exam.get_user(user_id).get_last_attempt()
 
     report = calculate_report(
-        benchmark_dataset,
-        attempt.project,
-        attempt.dataset,
-        classes_whitelist=[oc.name for oc in attempt_project_meta.obj_classes],
-        tags_whitelist=[tm.name for tm in attempt_project_meta.tag_metas],
-        obj_tags_whitelist=[tm.name for tm in attempt_project_meta.tag_metas],
-        iou_threshold=iou_threshold,
+        exam=exam,
+        attempt=attempt,
     )
 
     save_report(report, attempt)
@@ -530,36 +556,30 @@ def refresh_report(value_dict):
 
 def render_report(
     report,
-    benchmark_project,
-    benchmark_dataset,
-    exam_project,
-    exam_dataset,
-    classes,
-    tags,
-    passmark,
-    iou_threshold,
-    user_name,
+    exam: Exam,
+    user: Exam.ExamUser,
+    attempt: Exam.ExamUser.Attempt,
 ):
     results.loading = True
     return_button.disable()
 
-    diff_project, diff_dataset = get_diff_project(exam_project)
-    if diff_project is None or diff_dataset is None:
-        sly.logger.warning("Difference project not found. Recalculating report...")
-        report = calculate_report(
-            benchmark_dataset=benchmark_dataset,
-            exam_dataset=exam_dataset,
-            classes_whitelist=classes,
-            tags_whitelist=tags,
-            obj_tags_whitelist=tags,
-            iou_threshold=iou_threshold,
-        )
-        diff_project, diff_dataset = get_diff_project(exam_project)
-        if diff_project is None or diff_dataset is None:
-            raise RuntimeError("Difference project not found after recalculation")
+    diff_project = get_diff_project(attempt.project)
+    diff_dataset = get_diff_dataset(diff_project)
 
+    if diff_project is None or diff_dataset is None:
+        sly.logger.warning("Difference dataset not found. Recalculating report...")
+        report = calculate_report(
+            exam=exam,
+            attempt=attempt,
+        )
+        diff_project = get_diff_project(attempt.project)
+        diff_dataset = get_diff_dataset(diff_project)
+        if diff_project is None or diff_dataset is None:
+            raise RuntimeError("Difference dataset not found after recalculation")
+
+    passmark = exam.get_passmark()
     overall_score = get_overall_score(report)
-    assigned_to.set(user_name, status="text")
+    assigned_to.set(g.users.get(user.user_id).login, status="text")
     exam_passmark.set(f"{passmark}%", status="text")
     exam_score.set(f"{round(overall_score*100, 2)}%", status="text")
     status.set(
@@ -568,49 +588,42 @@ def render_report(
         else '<span style="color: red;">FAILED</span>',
         status="text",
     )
-    benchmark_project_thumbnail.set(benchmark_project)
+    benchmark_project_thumbnail.set(exam.benchmark_project)
 
     # load images
     global gt_imgs
-    gt_imgs = g.api.image.get_list(benchmark_dataset.id)
+    gt_imgs = get_img_infos(exam.benchmark_dataset)
     global pred_imgs
-    pred_imgs = g.api.image.get_list(exam_dataset.id)
+    pred_imgs = get_img_infos(attempt.dataset)
     global diff_imgs
-    diff_imgs = g.api.image.get_list(diff_dataset.id)
+    diff_imgs = get_img_infos(diff_dataset)
 
     # load image annotations
-    project_gt_meta = sly.ProjectMeta.from_json(
-        g.api.project.get_meta(benchmark_project.id)
-    )
-    project_pred_meta = sly.ProjectMeta.from_json(
-        g.api.project.get_meta(exam_project.id)
-    )
-    diff_project_meta = sly.ProjectMeta.from_json(
-        g.api.project.get_meta(diff_project.id)
-    )
+    diff_meta = sly.ProjectMeta.from_json(g.api.project.get_meta(diff_project.id))
     global gt_img_anns
     gt_img_anns = {
         ann_info.image_id: sly.Annotation.from_json(
-            ann_info.annotation, project_gt_meta
+            ann_info.annotation, exam.attempt_project_meta
         )
-        for ann_info in g.api.annotation.get_list(benchmark_dataset.id)
+        for ann_info in g.api.annotation.get_list(exam.benchmark_dataset.id)
     }
     global pred_img_anns
     pred_img_anns = {
         ann_info.image_id: sly.Annotation.from_json(
-            ann_info.annotation, project_pred_meta
+            ann_info.annotation, attempt.project_meta
         )
-        for ann_info in g.api.annotation.get_list(exam_dataset.id)
+        for ann_info in g.api.annotation.get_list(attempt.dataset.id)
     }
     global diff_img_anns
     diff_img_anns = {
         ann_info.image_id: sly.Annotation.from_json(
-            ann_info.annotation, diff_project_meta
+            ann_info.annotation, diff_meta
         )
         for ann_info in g.api.annotation.get_list(diff_dataset.id)
     }
 
     # obj count per class
+    classes = [obj_class.name for obj_class in attempt.project_meta.obj_classes]
     obj_count_per_class_table.read_json(
         {
             "columns": obj_count_per_class_table_columns,
@@ -639,6 +652,7 @@ def render_report(
     )
 
     # tags
+    tags = [tm.name for tm in attempt.project_meta.tag_metas]
     tags_stat_table.read_json(
         {
             "columns": tags_stat_table_columns,
