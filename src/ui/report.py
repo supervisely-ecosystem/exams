@@ -12,6 +12,7 @@ from supervisely.app.widgets import (
     Flexbox,
     Table,
     GridGallery,
+    NotificationBox,
 )
 
 import src.globals as g
@@ -147,6 +148,9 @@ return_button = Button(
     "Return to Exams", button_size="small", icon="zmdi zmdi-arrow-left"
 )
 
+error_notification = NotificationBox(title="Report Error", box_type="error", description="")
+error_notification.hide()
+
 results = Container(
     widgets=[
         overall_stats,
@@ -157,7 +161,7 @@ results = Container(
     ],
     gap=20,
 )
-layout = Container(widgets=[return_button, results], gap=20)
+layout = Container(widgets=[return_button, results, error_notification], gap=20)
 
 
 def get_overall_score(result):
@@ -382,6 +386,8 @@ def clean_up():
     exam_passmark.set("-", status="text")
     exam_score.set("-", status="text")
     status.set("-", status="text")
+    error_notification.hide()
+    results.show()
 
 
 def get_diff_project(attempt_project: sly.ProjectInfo):
@@ -522,6 +528,13 @@ def get_report(workspace_id, project_id):
     return None
 
 
+def error_in_report(report):
+    if isinstance(report, dict):
+        if "error" in report:
+            return True
+    return False
+
+
 def update_report_status(report, attempt):
     def get_overall_score(report):
         for data in report:
@@ -535,7 +548,11 @@ def update_report_status(report, attempt):
         return 0
 
     custom_data = g.api.project.get_info_by_id(attempt.project.id).custom_data
-    custom_data["overall_score"] = get_overall_score(report)
+    if error_in_report(report):
+        custom_data["overall_score"] = "Error"
+    else:
+        custom_data["overall_score"] = get_overall_score(report)
+    custom_data = g.api.project.get_info_by_id(attempt.project.id).custom_data
     g.api.project.update_custom_data(attempt.project.id, custom_data)
 
 
@@ -582,7 +599,16 @@ def render_report(
         diff_dataset = get_diff_dataset(diff_project)
         if diff_project is None or diff_dataset is None:
             raise RuntimeError("Difference dataset not found after recalculation")
-
+        
+    if error_in_report(report):
+        error_text = report["error"]
+        results.hide()
+        results.loading = False
+        return_button.enable()
+        error_notification.set(title="Error in Report", description=error_text)
+        error_notification.show()
+        return
+    
     passmark = exam.get_passmark()
     overall_score = get_overall_score(report)
     assigned_to.set(g.users.get(user.user_id).login, status="text")

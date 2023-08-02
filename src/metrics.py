@@ -597,7 +597,7 @@ def compute_metrics(
                     add_tag_counts(
                         image_tag_counters,
                         gt_ann.labels[gt_class_indices[match.idx_1]].tags,
-                        gt_ann.labels[
+                        pred_ann.labels[
                             pred_class_indices[match.idx_2]
                         ].tags,
                         obj_tags_whitelist,
