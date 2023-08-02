@@ -182,6 +182,12 @@ class ExamsTable:
             )
             for exam in exams.values()
         ]
+
+        key = lambda exam: dateutil.parser.isoparse(exam._created_at.rstrip("Z"))
+        sort_by = self._select_sort.get_value()
+        if sort_by is None:
+            sort_by = "newest"
+        self.exams_rows = sorted(self.exams_rows, key=key, reverse=sort_by == "newest")
         self.table.set(self.exams_rows)
 
         all_users = []
@@ -203,8 +209,6 @@ class ExamsTable:
 
         self.table.loading = False
         self.header.loading = False
-
-        self.sort(self._select_sort.get_value())
 
     def search_by_name(self, text: str):
         self.header.loading = True
@@ -229,7 +233,8 @@ class ExamsTable:
         self.table.loading = True
 
         key = lambda exam: dateutil.parser.isoparse(exam._created_at.rstrip("Z"))
-        self.table.set(sorted(self.table._exams, key=key, reverse=val == "newest"))
+        self.exams_rows = sorted(self.exams_rows, key=key, reverse=val == "newest")
+        self.table.set(self.exams_rows)
 
         self.header.loading = False
         self.table.loading = False
