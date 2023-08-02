@@ -94,7 +94,7 @@ class ExamsTable:
             multiple=True,
             size="mini",
         )
-        select_sort = Select(
+        self._select_sort = Select(
             items=[Select.Item("newest"), Select.Item("oldest")],
             placeholder="Sort",
             size="mini",
@@ -107,7 +107,7 @@ class ExamsTable:
                     self._select_filter_by_assignee,
                     self._select_filter_by_creator,
                     select_filter_by_status,
-                    select_sort,
+                    self._select_sort,
                 ]
             ),
             content_top_right=Container(
@@ -131,7 +131,7 @@ class ExamsTable:
         def filter_by_status_func(val):
             self.filter_changed("status", val)
 
-        @select_sort.value_changed
+        @self._select_sort.value_changed
         def sort_exams_table(val):
             self.sort(val)
 
@@ -182,6 +182,12 @@ class ExamsTable:
             )
             for exam in exams.values()
         ]
+
+        key = lambda exam: dateutil.parser.isoparse(exam._created_at.rstrip("Z"))
+        sort_by = self._select_sort.get_value()
+        if sort_by is None:
+            sort_by = "newest"
+        self.exams_rows = sorted(self.exams_rows, key=key, reverse=sort_by == "newest")
         self.table.set(self.exams_rows)
 
         all_users = []
@@ -227,7 +233,8 @@ class ExamsTable:
         self.table.loading = True
 
         key = lambda exam: dateutil.parser.isoparse(exam._created_at.rstrip("Z"))
-        self.table.set(sorted(self.table._exams, key=key, reverse=val == "newest"))
+        self.exams_rows = sorted(self.exams_rows, key=key, reverse=val == "newest")
+        self.table.set(self.exams_rows)
 
         self.header.loading = False
         self.table.loading = False
