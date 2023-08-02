@@ -4,7 +4,7 @@ import numpy as np
 import supervisely as sly
 from supervisely.app.widgets.sly_tqdm.sly_tqdm import CustomTqdm
 from supervisely import ProjectMeta, ImageInfo, TagCollection
-from supervisely import Bitmap, Rectangle
+from supervisely import Bitmap, Rectangle, Polygon, Label
 from supervisely.api.annotation_api import AnnotationInfo
 from supervisely.geometry.helpers import get_effective_nonoverlapping_masks
 from supervisely.metric.matching import get_geometries_iou, match_indices_by_score
@@ -69,6 +69,9 @@ _TAG_METRIC_NAMES = {
 OVERALL_SCORE = "overall-score"
 
 
+SEGMENTATION_GEOMETRIES = (Bitmap, Polygon)
+
+
 class MetricsException(Exception):
     def __init__(self, message):
         super().__init__()
@@ -107,6 +110,7 @@ class ComputeMetricsReq:
         tags_whitelist: List[str],
         obj_tags_whitelist: List[str],
         iou_threshold: float,
+        segmentation_mode: bool,
     ) -> None:
         self.united_meta = united_meta
         self.img_infos_gt = img_infos_gt
@@ -117,6 +121,7 @@ class ComputeMetricsReq:
         self.tags_whitelist = tags_whitelist
         self.obj_tags_whitelist = obj_tags_whitelist
         self.iou_threshold = iou_threshold
+        self.segmentation_mode = segmentation_mode
 
 
 class ComputeMetricsResult:
@@ -286,6 +291,14 @@ def safe_get_geometries_iou(g1, g2):
         return get_geometries_iou(g1, g2)
 
 
+def is_segmentation(label: Label, segmentation_mode: bool):
+    if not segmentation_mode:
+        return False
+    if type(label.geometry) in SEGMENTATION_GEOMETRIES:
+        return True
+    
+
+
 def compute_metrics(
     request: ComputeMetricsReq, progress: Optional[CustomTqdm] = None
 ) -> Tuple[ComputeMetricsResult, List[Bitmap]]:
@@ -299,6 +312,7 @@ def compute_metrics(
     ann_infos_gt = request.ann_infos_gt
     ann_infos_pred = request.ann_infos_pred
     class_mapping = request.class_mapping
+    segmentation_mode = request.segmentation_mode
     difference_geometries = []
     try:
         if len(img_infos_gt) != len(img_infos_pred):
@@ -336,8 +350,8 @@ def compute_metrics(
             ann_infos_gt,
             ann_infos_pred,
         ):
-            ann_gt = sly.Annotation.from_json(gt_ann_info.annotation, meta)
-            ann_pred = sly.Annotation.from_json(pred_ann_info.annotation, meta)
+            gt_ann = sly.Annotation.from_json(gt_ann_info.annotation, meta)
+            pred_ann = sly.Annotation.from_json(pred_ann_info.annotation, meta)
 
             image_class_counters = {
                 class_gt: _make_counters() for class_gt in class_mapping
@@ -354,88 +368,99 @@ def compute_metrics(
 
             add_tag_counts(
                 image_tag_counters,
-                ann_gt.img_tags,
-                ann_pred.img_tags,
+                gt_ann.img_tags,
+                pred_ann.img_tags,
                 tags_whitelist,
                 tp_key=TRUE_POSITIVE,
                 fp_key=FALSE_POSITIVE,
                 fn_key=FALSE_NEGATIVE,
             )
-            image_errors_canvas = np.zeros(ann_gt.img_size, dtype=np.bool)
+            image_errors_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
 
-            gt_nonrect_labels = [
-                label
-                for label in ann_gt.labels
-                if not isinstance(label.geometry, Rectangle)
+            # non segmentation labels
+            nonseg_gt_label_idxs = [
+                idx
+                for idx, label in enumerate(gt_ann.labels)
+                if not is_segmentation(label, segmentation_mode)
             ]
-            pred_nonrect_labels = [
-                label
-                for label in ann_pred.labels
-                if not isinstance(label.geometry, Rectangle)
+            nonseg_pred_labels_idxs = [
+                idx
+                for idx, label in enumerate(pred_ann.labels)
+                if not is_segmentation(label, segmentation_mode)
             ]
+
+            nonseg_gt_class_to_indices = {}
+            for idx in nonseg_gt_label_idxs:
+                label = gt_ann.labels[idx]
+                nonseg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(
+                    idx
+                )
+            nonseg_pred_class_to_indices = {}
+            for idx in nonseg_pred_labels_idxs:
+                label = pred_ann.labels[idx]
+                nonseg_pred_class_to_indices.setdefault(label.obj_class.name, []).append(
+                    idx
+                )
+
+            # segmentation labels
+            seg_gt_label_idxs = [
+                idx
+                for idx, label in enumerate(gt_ann.labels)
+                if is_segmentation(label, segmentation_mode)
+            ]
+            seg_pred_label_idxs = [
+                idx
+                for idx, label in enumerate(pred_ann.labels)
+                if is_segmentation(label, segmentation_mode)
+            ]
+
+            seg_gt_class_to_indices = {}
+            for idx in seg_gt_label_idxs:
+                label = gt_ann.labels[idx]
+                seg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(
+                    idx
+                )
+            seg_pred_class_to_indices = {}
+            for idx in seg_pred_label_idxs:
+                label = pred_ann.labels[idx]
+                seg_pred_class_to_indices.setdefault(label.obj_class.name, []).append(idx)
+
+            # segementation masks and canvas for segmentation labels
             (
-                nonrect_effective_masks_gt,
-                nonrect_effective_canvas_gt,
+                seg_gt_effective_masks,
+                seg_gt_effective_canvas,
             ) = get_effective_nonoverlapping_masks(
-                [label.geometry for label in gt_nonrect_labels],
-                img_size=ann_gt.img_size,
+                [gt_ann.labels[idx].geometry for idx in seg_gt_label_idxs],
+                img_size=gt_ann.img_size,
             )
+            gt_label_idx_to_effective_mask_idx = {idx: effective_idx for effective_idx, idx in enumerate(seg_gt_label_idxs)}
             (
-                nonrect_effective_masks_pred,
-                nonrect_effective_canvas_pred,
+                seg_pred_effective_masks,
+                seg_pred_effective_canvas,
             ) = get_effective_nonoverlapping_masks(
-                [label.geometry for label in pred_nonrect_labels],
-                img_size=ann_pred.img_size,
+                [pred_ann.labels[idx].geometry for idx in seg_pred_label_idxs],
+                img_size=pred_ann.img_size,
             )
+            pred_label_idx_to_effective_mask_idx = {idx: effective_idx for effective_idx, idx in enumerate(seg_pred_label_idxs)}
 
-            nonrect_class_to_indices_gt = {}
-            for idx, label in enumerate(gt_nonrect_labels):
-                nonrect_class_to_indices_gt.setdefault(label.obj_class.name, []).append(
-                    idx
-                )
-            nonrect_class_to_indices_pred = {}
-            for idx, label in enumerate(pred_nonrect_labels):
-                nonrect_class_to_indices_pred.setdefault(
-                    label.obj_class.name, []
-                ).append(idx)
-
-            gt_rectangles_labels = [
-                label
-                for label in ann_gt.labels
-                if isinstance(label.geometry, Rectangle)
-            ]
-            pred_rectangles_labels = [
-                label
-                for label in ann_pred.labels
-                if isinstance(label.geometry, Rectangle)
-            ]
-            rect_class_to_indices_gt = {}
-            for idx, label in enumerate(gt_rectangles_labels):
-                rect_class_to_indices_gt.setdefault(label.obj_class.name, []).append(
-                    idx
-                )
-            rect_class_to_indices_pred = {}
-            for idx, label in enumerate(pred_rectangles_labels):
-                rect_class_to_indices_pred.setdefault(label.obj_class.name, []).append(
-                    idx
-                )
-
+            # iterating over classes
             for gt_class, pred_class in class_mapping.items():
                 image_class_pixel_counters = image_pixel_counters[gt_class]
                 this_image_class_counters = image_class_counters[gt_class]
 
-                # Rectangles
+                # Non segmentation labels
+                
                 # Get indices of labels of matching classes
-                rect_gt_class_indices = rect_class_to_indices_gt.get(gt_class, [])
-                rect_pred_class_indices = rect_class_to_indices_pred.get(pred_class, [])
-                rect_class_matched_indices = match_indices_by_score(
+                gt_class_indices = nonseg_gt_class_to_indices.get(gt_class, [])
+                pred_class_indices = nonseg_pred_class_to_indices.get(pred_class, [])
+                matching_results = match_indices_by_score(
                     [
-                        gt_rectangles_labels[idx].geometry
-                        for idx in rect_gt_class_indices
+                        gt_ann.labels[idx].geometry
+                        for idx in gt_class_indices
                     ],
                     [
-                        pred_rectangles_labels[idx].geometry
-                        for idx in rect_pred_class_indices
+                        pred_ann.labels[idx].geometry
+                        for idx in pred_class_indices
                     ],
                     iou_threshold,
                     safe_get_geometries_iou,
@@ -443,44 +468,44 @@ def compute_metrics(
 
                 # Object matching counters
                 this_image_class_counters[TRUE_POSITIVE] = len(
-                    rect_class_matched_indices.matches
+                    matching_results.matches
                 )
                 this_image_class_counters[FALSE_NEGATIVE] = len(
-                    rect_class_matched_indices.unmatched_indices_1
+                    matching_results.unmatched_indices_1
                 )
                 this_image_class_counters[FALSE_POSITIVE] = len(
-                    rect_class_matched_indices.unmatched_indices_2
+                    matching_results.unmatched_indices_2
                 )
 
                 # Tags counters
-                for match in rect_class_matched_indices.matches:
+                for match in matching_results.matches:
                     add_tag_counts(
                         image_tag_counters,
-                        gt_rectangles_labels[rect_gt_class_indices[match.idx_1]].tags,
-                        pred_rectangles_labels[
-                            rect_pred_class_indices[match.idx_2]
+                        gt_ann.labels[gt_class_indices[match.idx_1]].tags,
+                        pred_ann.labels[
+                            pred_class_indices[match.idx_2]
                         ].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
                         fp_key=FALSE_POSITIVE,
                         fn_key=FALSE_NEGATIVE,
                     )
-                for fn_label_idx in rect_class_matched_indices.unmatched_indices_1:
+                for fn_label_idx in matching_results.unmatched_indices_1:
                     add_tag_counts(
                         image_tag_counters,
-                        gt_rectangles_labels[rect_gt_class_indices[fn_label_idx]].tags,
+                        gt_ann.labels[gt_class_indices[fn_label_idx]].tags,
                         TagCollection(),
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
                         fp_key=FALSE_POSITIVE,
                         fn_key=FALSE_NEGATIVE,
                     )
-                for fp_label_idx in rect_class_matched_indices.unmatched_indices_2:
+                for fp_label_idx in matching_results.unmatched_indices_2:
                     add_tag_counts(
                         image_tag_counters,
                         TagCollection(),
-                        pred_rectangles_labels[
-                            rect_pred_class_indices[fp_label_idx]
+                        pred_ann.labels[
+                            pred_class_indices[fp_label_idx]
                         ].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -488,18 +513,18 @@ def compute_metrics(
                         fn_key=FALSE_NEGATIVE,
                     )
 
-                # Iterating over matched rectangles
-                for gt_match, pred_match, _ in rect_class_matched_indices.matches:
-                    gt_match_rectangle_idx = rect_gt_class_indices[gt_match]
-                    pred_match_rectangle_idx = rect_pred_class_indices[pred_match]
-                    gt_rect = gt_rectangles_labels[gt_match_rectangle_idx].geometry
-                    pred_rect = pred_rectangles_labels[
-                        pred_match_rectangle_idx
+                # Iterating over matched labels
+                for gt_match, pred_match, _ in matching_results.matches:
+                    gt_match_idx = gt_class_indices[gt_match]
+                    pred_match_idx = pred_class_indices[pred_match]
+                    gt_geometry = gt_ann.labels[gt_match_idx].geometry
+                    pred_geometry = pred_ann.labels[
+                        pred_match_idx
                     ].geometry
-                    gt_canvas = np.zeros(ann_gt.img_size, dtype=np.bool)
-                    gt_rect.draw(gt_canvas, color=True)
-                    pred_canvas = np.zeros(ann_gt.img_size, dtype=np.bool)
-                    pred_rect.draw(pred_canvas, color=True)
+                    gt_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
+                    gt_geometry.draw(gt_canvas, color=True)
+                    pred_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
+                    pred_geometry.draw(pred_canvas, color=True)
                     error_canvas = gt_canvas != pred_canvas
 
                     # Pixel counters
@@ -513,65 +538,67 @@ def compute_metrics(
                         error_canvas
                     ).item()
                     common_bbox_area = int(
-                        Rectangle.from_geometries_list([gt_rect, pred_rect]).area
+                        Rectangle.from_geometries_list([gt_geometry, pred_geometry]).area
                     )
                     image_class_pixel_counters[TOTAL_PIXELS] += common_bbox_area
 
-                    # Add rectangles differences to image errors canvas
+                    # Add errors to image errors canvas
                     image_errors_canvas |= error_canvas
 
-                # Add rectagles differences to image errors canvas for unmatched rectangles
-                for gt_idx in rect_class_matched_indices.unmatched_indices_1:
-                    gt_rect = gt_rectangles_labels[
-                        rect_gt_class_indices[gt_idx]
+                # Add errors to image errors canvas for unmatched labels
+                for gt_idx in matching_results.unmatched_indices_1:
+                    gt_geometry = gt_ann.labels[
+                        gt_class_indices[gt_idx]
                     ].geometry
-                    gt_canvas = np.zeros(ann_gt.img_size, dtype=np.bool)
-                    gt_rect.draw(gt_canvas, color=True)
+                    gt_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
+                    gt_geometry.draw(gt_canvas, color=True)
                     image_errors_canvas |= gt_canvas
-                for pred_id in rect_class_matched_indices.unmatched_indices_2:
-                    pred_rect = pred_rectangles_labels[
-                        rect_pred_class_indices[pred_id]
+                for pred_idx in matching_results.unmatched_indices_2:
+                    pred_geometry = pred_ann.labels[
+                        pred_class_indices[pred_idx]
                     ].geometry
-                    pred_canvas = np.zeros(ann_gt.img_size, dtype=np.bool)
-                    pred_rect.draw(pred_canvas, color=True)
+                    pred_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
+                    pred_geometry.draw(pred_canvas, color=True)
                     image_errors_canvas |= pred_canvas
 
-                # Nonrectangles
-                nonrect_gt_class_indices = nonrect_class_to_indices_gt.get(gt_class, [])
-                nonrect_pred_class_indices = nonrect_class_to_indices_pred.get(
+
+                # Segmentation labels
+                gt_class_indices = seg_gt_class_to_indices.get(gt_class, [])
+                pred_class_indices = seg_pred_class_to_indices.get(
                     pred_class, []
                 )
-                nonrect_class_masks_gt = [
-                    nonrect_effective_masks_gt[idx] for idx in nonrect_gt_class_indices
+                seg_class_masks_gt = [
+                    seg_gt_effective_masks[gt_label_idx_to_effective_mask_idx[idx]] for idx in gt_class_indices
                 ]
-                nonrect_class_masks_pred = [
-                    nonrect_effective_masks_pred[idx]
-                    for idx in nonrect_pred_class_indices
+                seg_class_masks_pred = [
+                    seg_pred_effective_masks[pred_label_idx_to_effective_mask_idx[idx]]
+                    for idx in pred_class_indices
                 ]
-                nonrect_class_matched_indices = match_indices_by_score(
-                    nonrect_class_masks_gt,
-                    nonrect_class_masks_pred,
+                matching_results = match_indices_by_score(
+                    seg_class_masks_gt,
+                    seg_class_masks_pred,
                     iou_threshold,
                     safe_get_geometries_iou,
                 )
 
                 # Object matching counters
                 this_image_class_counters[TRUE_POSITIVE] += len(
-                    nonrect_class_matched_indices.matches
+                    matching_results.matches
                 )
                 this_image_class_counters[FALSE_NEGATIVE] += len(
-                    nonrect_class_matched_indices.unmatched_indices_1
+                    matching_results.unmatched_indices_1
                 )
                 this_image_class_counters[FALSE_POSITIVE] += len(
-                    nonrect_class_matched_indices.unmatched_indices_2
+                    matching_results.unmatched_indices_2
                 )
 
-                for match in nonrect_class_matched_indices.matches:
+                # Tags counters
+                for match in matching_results.matches:
                     add_tag_counts(
                         image_tag_counters,
-                        gt_nonrect_labels[nonrect_gt_class_indices[match.idx_1]].tags,
-                        pred_nonrect_labels[
-                            nonrect_pred_class_indices[match.idx_2]
+                        gt_ann.labels[gt_class_indices[match.idx_1]].tags,
+                        pred_ann.labels[
+                            pred_class_indices[match.idx_2]
                         ].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -579,10 +606,10 @@ def compute_metrics(
                         fn_key=FALSE_NEGATIVE,
                     )
 
-                for fn_label_idx in nonrect_class_matched_indices.unmatched_indices_1:
+                for fn_label_idx in matching_results.unmatched_indices_1:
                     add_tag_counts(
                         image_tag_counters,
-                        gt_nonrect_labels[nonrect_gt_class_indices[fn_label_idx]].tags,
+                        gt_ann.labels[gt_class_indices[fn_label_idx]].tags,
                         TagCollection(),
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -590,12 +617,12 @@ def compute_metrics(
                         fn_key=FALSE_NEGATIVE,
                     )
 
-                for fp_label_idx in nonrect_class_matched_indices.unmatched_indices_2:
+                for fp_label_idx in matching_results.unmatched_indices_2:
                     add_tag_counts(
                         image_tag_counters,
                         TagCollection(),
-                        pred_nonrect_labels[
-                            nonrect_pred_class_indices[fp_label_idx]
+                        pred_ann.labels[
+                            pred_class_indices[fp_label_idx]
                         ].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -603,32 +630,32 @@ def compute_metrics(
                         fn_key=FALSE_NEGATIVE,
                     )
 
-                nonrect_class_canvas_gt = np.isin(
-                    nonrect_effective_canvas_gt, nonrect_gt_class_indices
+                gt_canvas = np.isin(
+                    seg_gt_effective_canvas, gt_class_indices
                 )
-                nonrect_class_canvas_pred = np.isin(
-                    nonrect_effective_canvas_pred, nonrect_pred_class_indices
+                pred_canvas = np.isin(
+                    seg_pred_effective_canvas, pred_class_indices
                 )
-                nonrect_class_canvas_err = (
-                    nonrect_class_canvas_gt != nonrect_class_canvas_pred
+                error_canvas = (
+                    gt_canvas != pred_canvas
                 )
 
                 # Pixel counters
                 image_class_pixel_counters[INTERSECTION] += np.sum(
-                    nonrect_class_canvas_gt & nonrect_class_canvas_pred
+                    gt_canvas & pred_canvas
                 ).item()
                 image_class_pixel_counters[UNION] += np.sum(
-                    nonrect_class_canvas_gt | nonrect_class_canvas_pred
+                    gt_canvas | pred_canvas
                 ).item()
                 image_class_pixel_counters[ERROR_PIXELS] += np.sum(
-                    nonrect_class_canvas_err
+                    error_canvas
                 ).item()
                 image_class_pixel_counters[
                     TOTAL_PIXELS
-                ] += nonrect_class_canvas_err.size
+                ] += error_canvas.size
 
                 # Add nonrectangles differences to image errors canvas
-                image_errors_canvas |= nonrect_class_canvas_err
+                image_errors_canvas |= error_canvas
 
                 # Update image class counters
                 _sum_update_counters(
@@ -821,6 +848,7 @@ def calculate_exam_report(
     obj_tags_whitelist: List[str],
     iou_threshold: float,
     progress: Optional[CustomTqdm] = None,
+    segmentation_mode: Optional[bool] = True,
 ) -> Tuple[List, List[Bitmap]]:
     request = ComputeMetricsReq(
         united_meta=united_meta,
@@ -832,6 +860,7 @@ def calculate_exam_report(
         tags_whitelist=tags_whitelist,
         obj_tags_whitelist=obj_tags_whitelist,
         iou_threshold=iou_threshold,
+        segmentation_mode=segmentation_mode,
     )
     result, diff_bitmaps = compute_metrics(request, progress)
     return result.to_json(), diff_bitmaps
