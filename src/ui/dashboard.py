@@ -201,10 +201,10 @@ class ExamsTable:
         )
         self._select_filter_by_creator.set_value([])
 
-        self.sort(self._select_sort.get_value())
-
         self.table.loading = False
         self.header.loading = False
+
+        self.sort(self._select_sort.get_value())
 
     def search_by_name(self, text: str):
         self.header.loading = True
