@@ -94,7 +94,7 @@ class ExamsTable:
             multiple=True,
             size="mini",
         )
-        select_sort = Select(
+        self._select_sort = Select(
             items=[Select.Item("newest"), Select.Item("oldest")],
             placeholder="Sort",
             size="mini",
@@ -107,7 +107,7 @@ class ExamsTable:
                     self._select_filter_by_assignee,
                     self._select_filter_by_creator,
                     select_filter_by_status,
-                    select_sort,
+                    self._select_sort,
                 ]
             ),
             content_top_right=Container(
@@ -131,7 +131,7 @@ class ExamsTable:
         def filter_by_status_func(val):
             self.filter_changed("status", val)
 
-        @select_sort.value_changed
+        @self._select_sort.value_changed
         def sort_exams_table(val):
             self.sort(val)
 
@@ -200,6 +200,8 @@ class ExamsTable:
             items=[Select.Item(creator[0], creator[1]) for creator in creators]
         )
         self._select_filter_by_creator.set_value([])
+
+        self.sort(self._select_sort.get_value())
 
         self.table.loading = False
         self.header.loading = False
