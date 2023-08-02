@@ -476,6 +476,12 @@ def calculate_report(
     diff_project, diff_meta = get_or_create_diff_project(attempt.project, exam.attempt_project_meta)
     diff_dataset = get_or_create_diff_dataset(diff_project, attempt.dataset)
     error_obj_class = diff_meta.obj_classes.get("Error")
+    if error_obj_class is None:
+        error_obj_class = diff_meta.obj_classes.get("error")
+    if error_obj_class is None:
+        error_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
+        diff_meta = diff_meta.add_obj_class(error_obj_class)
+        g.api.project.update_meta(diff_project.id, diff_meta)
     for batch in sly.batched(list(zip(diffs, get_img_infos(diff_dataset)))):
         anns = []
         img_ids = []

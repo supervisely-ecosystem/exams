@@ -378,32 +378,31 @@ def compute_metrics(
             image_errors_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
 
             # non segmentation labels
-            gt_nonseg_label_idxs = [
+            nonseg_gt_label_idxs = [
                 idx
                 for idx, label in enumerate(gt_ann.labels)
                 if not is_segmentation(label, segmentation_mode)
             ]
-            pred_nonseg_labels_idxs = [
+            nonseg_pred_labels_idxs = [
                 idx
                 for idx, label in enumerate(pred_ann.labels)
                 if not is_segmentation(label, segmentation_mode)
             ]
 
-            gt_nonseg_class_to_indices = {}
-            for idx in gt_nonseg_label_idxs:
+            nonseg_gt_class_to_indices = {}
+            for idx in nonseg_gt_label_idxs:
                 label = gt_ann.labels[idx]
-                gt_nonseg_class_to_indices.setdefault(label.obj_class.name, []).append(
+                nonseg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(
                     idx
                 )
-            pred_nonseg_class_to_indices = {}
-            for idx in pred_nonseg_labels_idxs:
+            nonseg_pred_class_to_indices = {}
+            for idx in nonseg_pred_labels_idxs:
                 label = pred_ann.labels[idx]
-                pred_nonseg_class_to_indices.setdefault(label.obj_class.name, []).append(
+                nonseg_pred_class_to_indices.setdefault(label.obj_class.name, []).append(
                     idx
                 )
 
             # segmentation labels
-
             seg_gt_label_idxs = [
                 idx
                 for idx, label in enumerate(gt_ann.labels)
@@ -416,13 +415,13 @@ def compute_metrics(
             ]
 
             seg_gt_class_to_indices = {}
-            for idx in gt_nonseg_label_idxs:
+            for idx in seg_gt_label_idxs:
                 label = gt_ann.labels[idx]
                 seg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(
                     idx
                 )
             seg_pred_class_to_indices = {}
-            for idx in pred_nonseg_labels_idxs:
+            for idx in seg_pred_label_idxs:
                 label = pred_ann.labels[idx]
                 seg_pred_class_to_indices.setdefault(label.obj_class.name, []).append(idx)
 
@@ -434,6 +433,7 @@ def compute_metrics(
                 [gt_ann.labels[idx].geometry for idx in seg_gt_label_idxs],
                 img_size=gt_ann.img_size,
             )
+            gt_label_idx_to_effective_mask_idx = {idx: effective_idx for effective_idx, idx in enumerate(seg_gt_label_idxs)}
             (
                 seg_pred_effective_masks,
                 seg_pred_effective_canvas,
@@ -441,6 +441,7 @@ def compute_metrics(
                 [pred_ann.labels[idx].geometry for idx in seg_pred_label_idxs],
                 img_size=pred_ann.img_size,
             )
+            pred_label_idx_to_effective_mask_idx = {idx: effective_idx for effective_idx, idx in enumerate(seg_pred_label_idxs)}
 
             # iterating over classes
             for gt_class, pred_class in class_mapping.items():
@@ -448,9 +449,10 @@ def compute_metrics(
                 this_image_class_counters = image_class_counters[gt_class]
 
                 # Non segmentation labels
+                
                 # Get indices of labels of matching classes
-                gt_class_indices = gt_nonseg_class_to_indices.get(gt_class, [])
-                pred_class_indices = pred_nonseg_class_to_indices.get(pred_class, [])
+                gt_class_indices = nonseg_gt_class_to_indices.get(gt_class, [])
+                pred_class_indices = nonseg_pred_class_to_indices.get(pred_class, [])
                 matching_results = match_indices_by_score(
                     [
                         gt_ann.labels[idx].geometry
@@ -561,16 +563,16 @@ def compute_metrics(
 
 
                 # Segmentation labels
-                seg_gt_class_indices = seg_gt_class_to_indices.get(gt_class, [])
-                seg_pred_class_indices = seg_pred_class_to_indices.get(
+                gt_class_indices = seg_gt_class_to_indices.get(gt_class, [])
+                pred_class_indices = seg_pred_class_to_indices.get(
                     pred_class, []
                 )
                 seg_class_masks_gt = [
-                    seg_gt_effective_masks[idx] for idx in seg_gt_class_indices
+                    seg_gt_effective_masks[gt_label_idx_to_effective_mask_idx[idx]] for idx in gt_class_indices
                 ]
                 seg_class_masks_pred = [
-                    seg_pred_effective_masks[idx]
-                    for idx in seg_pred_class_indices
+                    seg_pred_effective_masks[pred_label_idx_to_effective_mask_idx[idx]]
+                    for idx in pred_class_indices
                 ]
                 matching_results = match_indices_by_score(
                     seg_class_masks_gt,
@@ -594,9 +596,9 @@ def compute_metrics(
                 for match in matching_results.matches:
                     add_tag_counts(
                         image_tag_counters,
-                        gt_ann.labels[seg_gt_class_indices[match.idx_1]].tags,
+                        gt_ann.labels[gt_class_indices[match.idx_1]].tags,
                         gt_ann.labels[
-                            seg_pred_class_indices[match.idx_2]
+                            pred_class_indices[match.idx_2]
                         ].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -607,7 +609,7 @@ def compute_metrics(
                 for fn_label_idx in matching_results.unmatched_indices_1:
                     add_tag_counts(
                         image_tag_counters,
-                        gt_ann.labels[seg_gt_class_indices[fn_label_idx]].tags,
+                        gt_ann.labels[gt_class_indices[fn_label_idx]].tags,
                         TagCollection(),
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -620,7 +622,7 @@ def compute_metrics(
                         image_tag_counters,
                         TagCollection(),
                         pred_ann.labels[
-                            seg_pred_class_indices[fp_label_idx]
+                            pred_class_indices[fp_label_idx]
                         ].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
@@ -629,10 +631,10 @@ def compute_metrics(
                     )
 
                 gt_canvas = np.isin(
-                    seg_gt_effective_canvas, seg_gt_class_indices
+                    seg_gt_effective_canvas, gt_class_indices
                 )
                 pred_canvas = np.isin(
-                    seg_pred_effective_canvas, seg_pred_class_indices
+                    seg_pred_effective_canvas, pred_class_indices
                 )
                 error_canvas = (
                     gt_canvas != pred_canvas
