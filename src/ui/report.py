@@ -476,6 +476,7 @@ def calculate_report(
         tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
         obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
         iou_threshold=exam.iou_threshold() / 100,
+        segmentation_mode=exam.segmentation_mode
     )
 
     # upload diff annotations
