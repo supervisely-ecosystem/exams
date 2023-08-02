@@ -130,6 +130,7 @@ maximum_attempts = RadioGroup(
         RadioGroup.Item("Fixed", content=input_attempts),
     ]
 )
+segmentation_mode_checkmark = Checkbox(content="Segmentation mode")
 time_limit = Select(items=[Select.Item("Unlimited")])
 # disable because it is coming soon
 time_limit.disable()
@@ -154,6 +155,11 @@ exam_settings = Card(
                 title="Matching threshold",
                 description="IoU threshold for matching (in %)",
                 content=matching_threshold,
+            ),
+            Field(
+                title="Segmentation mode",
+                description='If enabled, geometries of type "Bitmap" and "Polygon" will be treated as segmentation. Label that was added later will overlap older labels.',
+                content=segmentation_mode_checkmark,
             ),
             Field(
                 title="Maximum Attempts",
@@ -344,6 +350,7 @@ def create_exam():
         else input_attempts.get_value()
     )
     show_report_to_labelers = show_report_to_labelers_checkmark.is_checked()
+    segmentation_mode = segmentation_mode_checkmark.is_checked()
 
     if g.api.workspace.exists(g.team_id, f'Exam: "{exam_name}"'):
         sly.app.show_dialog(
@@ -410,6 +417,7 @@ def create_exam():
         "attempts": attempts,
         "show_report_to_labelers": show_report_to_labelers,
         "created_by": g.user_id,
+        "segmentation_mode": segmentation_mode,
     }
     g.api.project.update_custom_data(
         benchmark_project.id, benchmark_project_custom_data

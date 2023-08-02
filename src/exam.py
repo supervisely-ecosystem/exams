@@ -39,13 +39,15 @@ class Exam:
         benchmark_project: sly.ProjectInfo,
         benchmark_project_meta: sly.ProjectMeta,
         benchmark_dataset: sly.DatasetInfo,
-        users: List[Exam.ExamUser]
+        users: List[Exam.ExamUser],
+        segmentation_mode: bool,
     ):
         self.workspace = workspace
         self.benchmark_project = benchmark_project
         self.benchmark_dataset = benchmark_dataset
         self.benchmark_project_meta = benchmark_project_meta
         self._users = {user.user_id: user for user in users}
+        self.segmentation_mode = segmentation_mode
         self.attempt_project_meta = self._get_attempt_project_meta()
 
     @classmethod
@@ -79,6 +81,8 @@ class Exam:
 
         benchmark_project_meta = get_project_meta(benchmark_project.id, api)
 
+        segmentation_mode = get_segmentation_mode(benchmark_project)
+
         return Exam(
             workspace=workspace,
             benchmark_project=benchmark_project,
@@ -106,6 +110,7 @@ class Exam:
                 )
                 for user_id, projects in user_attempt_projects.items()
             ],
+            segmentation_mode=segmentation_mode,
         )
     
     def name(self):
@@ -238,3 +243,10 @@ def get_attempt_number(project: sly.ProjectInfo):
             return int(project.name.split("Attempt: ")[1])
         except:
             raise RuntimeError(f"Can't find attempt number for project: {project.name} (id: {project.id})")
+
+
+def get_segmentation_mode(project: sly.ProjectInfo):
+    try:
+        return project.custom_data["segmentation_mode"]
+    except KeyError:
+        return True
