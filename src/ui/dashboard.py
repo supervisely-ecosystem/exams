@@ -19,11 +19,17 @@ from src.exam import Exam
 
 
 def get_user_login(exam_user: Exam.ExamUser):
-    return g.users.get(exam_user.user_id).login
+    user = g.users.get(exam_user.user_id)
+    if user is None:
+        return f"Unknown (ID: {exam_user.user_id})"
+    return user.login
 
 
 def get_user_name(exam_user: Exam.ExamUser):
-    return g.users.get(exam_user.user_id).name
+    user = g.users.get(exam_user.user_id)
+    if user is None:
+        return f"Unknown (ID: {exam_user.user_id})"
+    return user.name
 
 
 @timeit
