@@ -52,6 +52,7 @@ def go_to_report(value_dict):
     workspace_id = value_dict["workspace_id"]
     project_id = value_dict["project_id"]
     user_id = value_dict["user_id"]
+    exam = g.exams[workspace_id]
     user = exam.get_user(user_id)
     if user is None:
         show_dialog(
@@ -68,7 +69,6 @@ def go_to_report(value_dict):
     if report is None:
         report = refresh_report(value_dict)
 
-    exam = g.exams[workspace_id]
     attempt = user.get_last_attempt()
     
     render_report(
