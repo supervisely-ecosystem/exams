@@ -24,6 +24,7 @@ import supervisely as sly
 import src.globals as g
 from src.exam import Exam
 from src.constants import DEFAULT_EXAM_PASSMARK, DEFAULT_MATCHING_THRESHOLD
+from supervisely.app import show_dialog
 
 
 title_input = Input(size="small")
@@ -243,6 +244,13 @@ def create_attempt_project_for_user(
     attempt: int,
     reviewer: int,
 ):
+    if user is None:
+        show_dialog(
+            "User not found",
+            f"User with id {user_id} not found in the team",
+            "error",
+        )
+        return
     project = g.api.project.create(
         workspace_id=workspace.id,
         name=f"{workspace.name}. User: {user.login}. Attempt: {attempt}",
@@ -292,6 +300,13 @@ def create_attempt(
     attempt_num,
 ):
     user_info = g.users.get(user_id)
+    if user_info is None:
+        show_dialog(
+            "User not found",
+            f"User with id {user_id} not found in the team",
+            "error",
+        )
+        return
     attempt_project = create_attempt_project_for_user(
         workspace, user_info, attempt_num, reviewer
     )
