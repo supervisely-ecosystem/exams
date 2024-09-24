@@ -84,17 +84,8 @@ def go_to_report(value_dict):
 
 @exams_table.table.new_attempt_clicked
 def start_new_attempt(value_dict):
-    exams_table.table.loading = True
-    exams_table.header.loading = True
-    workspace_id = value_dict["workspace_id"]
     user_id = value_dict["user_id"]
-    attempts = value_dict["try"]
-    exam = g.exams[workspace_id]
-    exam: Exam
-    max_attempts = exam.max_attempts()
-    if max_attempts is not None and attempts >= max_attempts:
-        return
-    user = exam.get_user(user_id)
+    user = g.users.get(user_id)
     if user is None:
         show_dialog(
             "User not found",
@@ -102,6 +93,16 @@ def start_new_attempt(value_dict):
             "error",
         )
         return
+    exams_table.table.loading = True
+    exams_table.header.loading = True
+    workspace_id = value_dict["workspace_id"]
+    attempts = value_dict["try"]
+    exam = g.exams[workspace_id]
+    exam: Exam
+    max_attempts = exam.max_attempts()
+    if max_attempts is not None and attempts >= max_attempts:
+        return
+    user = exam.get_user(user_id)
     attempt = user.get_last_attempt()
     create_attempt(
         workspace=exam.workspace,
