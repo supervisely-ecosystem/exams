@@ -17,6 +17,8 @@ import src.globals as g
 from src.ui.widgets.expandable_table import ExpandableTable
 from src.exam import Exam
 
+def is_teammate(user_id):
+    return user_id in g.users.keys()
 
 def get_user_login(exam_user: Exam.ExamUser):
     user = g.users.get(exam_user.user_id)
@@ -184,6 +186,7 @@ class ExamsTable:
                         labeling_job=exam_user.get_last_attempt().labeling_job,
                     )
                     for exam_user in exam.get_all_users()
+                    if is_teammate(exam_user.user_id)
                 ],
             )
             for exam in exams.values()

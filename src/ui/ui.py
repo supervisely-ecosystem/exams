@@ -86,6 +86,8 @@ def start_new_attempt(value_dict):
     if max_attempts is not None and attempts >= max_attempts:
         return
     user = exam.get_user(user_id)
+    if user is None:
+        return
     attempt = user.get_last_attempt()
     create_attempt(
         workspace=exam.workspace,
