@@ -1,4 +1,5 @@
 from supervisely.app.widgets import OneOf, Select
+from supervisely.app import show_dialog
 import src.globals as g
 from src.ui.dashboard import (
     layout as dashboard_layout,
@@ -51,6 +52,14 @@ def go_to_report(value_dict):
     workspace_id = value_dict["workspace_id"]
     project_id = value_dict["project_id"]
     user_id = value_dict["user_id"]
+    user = exam.get_user(user_id)
+    if user is None:
+        show_dialog(
+            "User not found",
+            f"User with id {user_id} not found in the team",
+            "error",
+        )
+        return
 
     select_page.set_value(REPORT)
     report_results.loading = True
@@ -60,7 +69,6 @@ def go_to_report(value_dict):
         report = refresh_report(value_dict)
 
     exam = g.exams[workspace_id]
-    user = exam.get_user(user_id)
     attempt = user.get_last_attempt()
     
     render_report(
@@ -87,6 +95,11 @@ def start_new_attempt(value_dict):
         return
     user = exam.get_user(user_id)
     if user is None:
+        show_dialog(
+            "User not found",
+            f"User with id {user_id} not found in the team",
+            "error",
+        )
         return
     attempt = user.get_last_attempt()
     create_attempt(
