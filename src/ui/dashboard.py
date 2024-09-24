@@ -186,7 +186,6 @@ class ExamsTable:
                         labeling_job=exam_user.get_last_attempt().labeling_job,
                     )
                     for exam_user in exam.get_all_users()
-                    if is_teammate(exam_user.user_id)
                 ],
             )
             for exam in exams.values()
