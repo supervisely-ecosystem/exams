@@ -270,7 +270,7 @@ timeline_filters = Flexbox(
 
 
 @report_per_image_video_select.value_changed
-def s(value):
+def video_changed(value):
     if value is None:
         return
     vid = None
