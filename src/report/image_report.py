@@ -6,17 +6,26 @@ from supervisely.app.widgets import (
     Container,
     Text,
     Card,
-    Button,
-    Field,
-    ProjectThumbnail,
-    Flexbox,
     Table,
     GridGallery,
-    NotificationBox,
 )
 
 import src.globals as g
-from src.metrics import calculate_exam_report
+from src.report.image_metrics import calculate_exam_report
+from src.report.report import (
+    return_button,
+    get_diff_dataset,
+    get_diff_project,
+    get_or_create_diff_project,
+    error_notification,
+    error_in_report,
+    assigned_to,
+    exam_passmark,
+    exam_score,
+    status,
+    benchmark_project_thumbnail,
+    overall_stats,
+)
 from src.exam import Exam
 
 
@@ -26,26 +35,6 @@ diff_imgs = []
 gt_img_anns = {}
 pred_img_anns = {}
 diff_img_anns = {}
-
-assigned_to = Text("")
-exam_passmark = Text("")
-exam_score = Text("")
-status = Text("")
-benchmark_project_thumbnail = ProjectThumbnail()
-
-overall_stats = Card(
-    title="EXAM OVERALL STATS",
-    content=Flexbox(
-        widgets=[
-            Field(title="Assigned to", content=assigned_to),
-            Field(title="Exam Passmark", content=exam_passmark),
-            Field(title="Exam Score", content=exam_score),
-            Field(title="Status", content=status),
-            Field(title="Benchmark Project", content=benchmark_project_thumbnail),
-        ],
-        gap=45,
-    ),
-)
 
 obj_count_per_class_table_columns = [
     "NAME",
@@ -59,9 +48,7 @@ obj_count_per_class_table = Table(columns=obj_count_per_class_table_columns)
 obj_count_per_class_last = Text()
 obj_count_per_class = Card(
     title="OBJECTS COUNT PER CLASS",
-    content=Container(
-        widgets=[obj_count_per_class_table, obj_count_per_class_last], gap=5
-    ),
+    content=Container(widgets=[obj_count_per_class_table, obj_count_per_class_last], gap=5),
 )
 
 geometry_quality_table_columns = ["NAME", "Pixel Accuracy", "IOU"]
@@ -82,9 +69,7 @@ tags_stat_table_columns = [
 ]
 tags_stat_table = Table(columns=tags_stat_table_columns)
 tags_stat_last = Text()
-tags_stat = Card(
-    title="TAGS", content=Container(widgets=[tags_stat_table, tags_stat_last], gap=5)
-)
+tags_stat = Card(title="TAGS", content=Container(widgets=[tags_stat_table, tags_stat_last], gap=5))
 
 report_per_image_table_columns = [
     "NAME",
@@ -144,12 +129,6 @@ report_per_image = Card(
     ),
 )
 
-return_button = Button(
-    "Return to Exams", button_size="small", icon="zmdi zmdi-arrow-left"
-)
-
-error_notification = NotificationBox(title="Report Error", box_type="error", description="")
-error_notification.hide()
 
 results = Container(
     widgets=[
@@ -161,17 +140,12 @@ results = Container(
     ],
     gap=20,
 )
-layout = Container(widgets=[return_button, results, error_notification], gap=20)
 
 
 def get_overall_score(result):
     for data in result:
         if data["metric_name"] == "overall-score":
-            if (
-                data["class_gt"] == ""
-                and data["image_gt_id"] == 0
-                and data["tag_name"] == ""
-            ):
+            if data["class_gt"] == "" and data["image_gt_id"] == 0 and data["tag_name"] == "":
                 return data["value"]
     return 0
 
@@ -184,25 +158,13 @@ def get_obj_count_per_class_row(result, class_name):
     matches_f_measure = 1
     for data in result:
         if data["image_gt_id"] == 0:
-            if (
-                data["metric_name"] == "num-objects-gt"
-                and data["class_gt"] == class_name
-            ):
+            if data["metric_name"] == "num-objects-gt" and data["class_gt"] == class_name:
                 num_objects_gt = data["value"]
-            if (
-                data["metric_name"] == "num-objects-pred"
-                and data["class_gt"] == class_name
-            ):
+            if data["metric_name"] == "num-objects-pred" and data["class_gt"] == class_name:
                 num_objects_pred = data["value"]
-            if (
-                data["metric_name"] == "matches-recall"
-                and data["class_gt"] == class_name
-            ):
+            if data["metric_name"] == "matches-recall" and data["class_gt"] == class_name:
                 matches_recall_percent = data["value"]
-            if (
-                data["metric_name"] == "matches-precision"
-                and data["class_gt"] == class_name
-            ):
+            if data["metric_name"] == "matches-precision" and data["class_gt"] == class_name:
                 matches_precision_percent = data["value"]
             if data["metric_name"] == "matches-f1" and data["class_gt"] == class_name:
                 matches_f_measure = data["value"]
@@ -233,10 +195,7 @@ def get_geometry_quality_row(result, class_name):
     iou = 1
     for data in result:
         if data["image_gt_id"] == 0:
-            if (
-                data["metric_name"] == "pixel-accuracy"
-                and data["class_gt"] == class_name
-            ):
+            if data["metric_name"] == "pixel-accuracy" and data["class_gt"] == class_name:
                 pixel_accuracy = data["value"]
             if data["metric_name"] == "iou" and data["class_gt"] == class_name:
                 iou = data["value"]
@@ -266,10 +225,7 @@ def get_tags_stat_table_row(result, tag_name):
         if data["image_gt_id"] == 0:
             if data["metric_name"] == "tags-total-gt" and data["tag_name"] == tag_name:
                 total_gt = data["value"]
-            if (
-                data["metric_name"] == "tags-total-pred"
-                and data["tag_name"] == tag_name
-            ):
+            if data["metric_name"] == "tags-total-pred" and data["tag_name"] == tag_name:
                 total_pred = data["value"]
             if data["metric_name"] == "tags-precision" and data["tag_name"] == tag_name:
                 precision = data["value"]
@@ -310,11 +266,7 @@ def get_report_per_image_row(result, image_name, image_id):
     geometry_score = 0
     overall_score = 0
     for data in result:
-        if (
-            data["image_gt_id"] == image_id
-            and data["class_gt"] == ""
-            and data["tag_name"] == ""
-        ):
+        if data["image_gt_id"] == image_id and data["class_gt"] == "" and data["tag_name"] == "":
             if data["metric_name"] == "matches-f1":
                 objects_score = data["value"]
             if data["metric_name"] == "matches-false-negative":
@@ -363,9 +315,7 @@ def clean_up():
             "data": [],
         }
     )
-    geometry_quality_last.set(
-        f"<b>Geometry score (average IoU) {0.00}%</b>", status="text"
-    )
+    geometry_quality_last.set(f"<b>Geometry score (average IoU) {0.00}%</b>", status="text")
 
     tags_stat_table.read_json(
         {
@@ -390,43 +340,6 @@ def clean_up():
     results.show()
 
 
-def get_diff_project(attempt_project: sly.ProjectInfo):
-    diff_project = g.api.project.get_info_by_name(
-        attempt_project.workspace_id, f"{attempt_project.name}_DIFF"
-    )
-    return diff_project
-
-
-def get_diff_dataset(diff_project: sly.ProjectInfo):
-    try:
-        return g.api.dataset.get_list(diff_project.id)[0]
-    except IndexError:
-        return None
-
-
-def create_diff_project(attempt_project: sly.ProjectInfo, attempt_meta: sly.ProjectMeta):
-    # create diff project
-    diff_project = g.api.project.create(
-        workspace_id=attempt_project.workspace_id,
-        name=attempt_project.name + "_DIFF",
-        type=attempt_project.type,
-        description="",
-        change_name_if_conflict=True,
-    )
-
-    # upload custom_data
-    g.api.project.update_custom_data(
-        diff_project.id, {"attempt_project_id": attempt_project.id}
-    )
-
-    # upload diff project meta
-    diff_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
-    diff_meta = attempt_meta.add_obj_class(diff_obj_class)
-    g.api.project.update_meta(diff_project.id, diff_meta)
-
-    return diff_project, diff_meta
-
-
 def create_diff_dataset(diff_project: sly.ProjectInfo, attempt_dataset: sly.DatasetInfo):
     diff_dataset = g.api.dataset.create(diff_project.id, attempt_dataset.name)
     imgs = g.api.image.get_list(attempt_dataset.id)
@@ -434,14 +347,6 @@ def create_diff_dataset(diff_project: sly.ProjectInfo, attempt_dataset: sly.Data
     g.api.image.upload_ids(diff_dataset.id, img_names, img_ids)
 
     return diff_dataset
-
-
-def get_or_create_diff_project(attempt_project: sly.ProjectInfo, attempt_meta: sly.ProjectMeta):
-    diff_project = get_diff_project(attempt_project)
-    if diff_project is None:
-        return create_diff_project(attempt_project, attempt_meta)
-    diff_meta = sly.ProjectMeta.from_json(g.api.project.get_meta(diff_project.id))
-    return diff_project, diff_meta
 
 
 def get_or_create_diff_dataset(diff_project: sly.ProjectInfo, attempt_dataset: sly.DatasetInfo):
@@ -460,12 +365,11 @@ def get_ann_infos(dataset: sly.DatasetInfo):
 
 
 @sly.timeit
-def calculate_report(
-    exam: Exam,
-    attempt: Exam.ExamUser.Attempt
-):
+def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt):
     return_button.disable()
-    class_mapping = {obj_class.name: obj_class.name for obj_class in attempt.project_meta.obj_classes}
+    class_mapping = {
+        obj_class.name: obj_class.name for obj_class in attempt.project_meta.obj_classes
+    }
     report, diffs = calculate_exam_report(
         united_meta=attempt.project_meta,
         img_infos_gt=get_img_infos(exam.benchmark_dataset),
@@ -476,7 +380,7 @@ def calculate_report(
         tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
         obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
         iou_threshold=exam.iou_threshold() / 100,
-        segmentation_mode=exam.segmentation_mode
+        segmentation_mode=exam.segmentation_mode,
     )
 
     # upload diff annotations
@@ -495,85 +399,21 @@ def calculate_report(
         for diff, diff_img in batch:
             if diff is None:
                 continue
-            anns.append(sly.Annotation(
-                img_size=(diff_img.height, diff_img.width),
-                labels=[sly.Label(
-                    geometry=diff,
-                    obj_class=error_obj_class,
-                )]
-            ))
+            anns.append(
+                sly.Annotation(
+                    img_size=(diff_img.height, diff_img.width),
+                    labels=[
+                        sly.Label(
+                            geometry=diff,
+                            obj_class=error_obj_class,
+                        )
+                    ],
+                )
+            )
             img_ids.append(diff_img.id)
         g.api.annotation.upload_anns(img_ids, anns)
 
     return_button.enable()
-
-    return report
-
-
-def save_report(report, attempt):
-    with open("report.json", "w") as f:
-        json.dump(report, f)
-    report_path = f"/exam_data/{attempt.project.id}/report.json"
-    g.api.file.upload(g.team_id, "report.json", report_path)
-
-
-def get_report(workspace_id, project_id):
-    while g.is_refreshing_report:
-        time.sleep(0.2)
-    report_path = f"/exam_data/{workspace_id}/{project_id}/report.json"
-    if g.api.file.exists(g.team_id, report_path):
-        g.api.file.download(g.team_id, report_path, "report.json")
-        with open("report.json", "r") as f:
-            report = json.load(f)
-        return report
-    return None
-
-
-def error_in_report(report):
-    if isinstance(report, dict):
-        if "error" in report:
-            return True
-    return False
-
-
-def update_report_status(report, attempt):
-    def get_overall_score(report):
-        for data in report:
-            if data["metric_name"] == "overall-score":
-                if (
-                    data["class_gt"] == ""
-                    and data["image_gt_id"] == 0
-                    and data["tag_name"] == ""
-                ):
-                    return data["value"]
-        return 0
-
-    custom_data = g.api.project.get_info_by_id(attempt.project.id).custom_data
-    if error_in_report(report):
-        custom_data["overall_score"] = "Error"
-    else:
-        custom_data["overall_score"] = get_overall_score(report)
-    custom_data = g.api.project.get_info_by_id(attempt.project.id).custom_data
-    g.api.project.update_custom_data(attempt.project.id, custom_data)
-
-
-def refresh_report(value_dict):
-    g.is_refreshing_report = True
-
-    workspace_id = value_dict["workspace_id"]
-    user_id = value_dict["user_id"]
-
-    exam = g.exams[workspace_id]
-    attempt = exam.get_user(user_id).get_last_attempt()
-
-    report = calculate_report(
-        exam=exam,
-        attempt=attempt,
-    )
-
-    save_report(report, attempt)
-    update_report_status(report, attempt)
-    g.is_refreshing_report = False
 
     return report
 
@@ -600,7 +440,7 @@ def render_report(
         diff_dataset = get_diff_dataset(diff_project)
         if diff_project is None or diff_dataset is None:
             raise RuntimeError("Difference dataset not found after recalculation")
-        
+
     if error_in_report(report):
         error_text = report["error"]
         results.hide()
@@ -609,16 +449,18 @@ def render_report(
         error_notification.set(title="Error in Report", description=error_text)
         error_notification.show()
         return
-    
+
     passmark = exam.get_passmark()
     overall_score = get_overall_score(report)
     assigned_to.set(g.users.get(user.user_id).login, status="text")
     exam_passmark.set(f"{passmark}%", status="text")
     exam_score.set(f"{round(overall_score*100, 2)}%", status="text")
     status.set(
-        '<span style="color: green;">PASSED</span>'
-        if overall_score * 100 > passmark
-        else '<span style="color: red;">FAILED</span>',
+        (
+            '<span style="color: green;">PASSED</span>'
+            if overall_score * 100 > passmark
+            else '<span style="color: red;">FAILED</span>'
+        ),
         status="text",
     )
     benchmark_project_thumbnail.set(exam.benchmark_project)
@@ -635,23 +477,17 @@ def render_report(
     diff_meta = sly.ProjectMeta.from_json(g.api.project.get_meta(diff_project.id))
     global gt_img_anns
     gt_img_anns = {
-        ann_info.image_id: sly.Annotation.from_json(
-            ann_info.annotation, exam.attempt_project_meta
-        )
+        ann_info.image_id: sly.Annotation.from_json(ann_info.annotation, exam.attempt_project_meta)
         for ann_info in g.api.annotation.get_list(exam.benchmark_dataset.id)
     }
     global pred_img_anns
     pred_img_anns = {
-        ann_info.image_id: sly.Annotation.from_json(
-            ann_info.annotation, attempt.project_meta
-        )
+        ann_info.image_id: sly.Annotation.from_json(ann_info.annotation, attempt.project_meta)
         for ann_info in g.api.annotation.get_list(attempt.dataset.id)
     }
     global diff_img_anns
     diff_img_anns = {
-        ann_info.image_id: sly.Annotation.from_json(
-            ann_info.annotation, diff_meta
-        )
+        ann_info.image_id: sly.Annotation.from_json(ann_info.annotation, diff_meta)
         for ann_info in g.api.annotation.get_list(diff_dataset.id)
     }
 
@@ -660,9 +496,7 @@ def render_report(
     obj_count_per_class_table.read_json(
         {
             "columns": obj_count_per_class_table_columns,
-            "data": [
-                get_obj_count_per_class_row(report, cls_name) for cls_name in classes
-            ],
+            "data": [get_obj_count_per_class_row(report, cls_name) for cls_name in classes],
         }
     )
     obj_count_per_class_last.set(
@@ -674,9 +508,7 @@ def render_report(
     geometry_quality_table.read_json(
         {
             "columns": geometry_quality_table_columns,
-            "data": [
-                get_geometry_quality_row(report, cls_name) for cls_name in classes
-            ],
+            "data": [get_geometry_quality_row(report, cls_name) for cls_name in classes],
         }
     )
     geometry_quality_last.set(
@@ -702,8 +534,7 @@ def render_report(
         {
             "columns": report_per_image_table_columns,
             "data": [
-                get_report_per_image_row(report, gt_img.name, gt_img.id)
-                for gt_img in gt_imgs
+                get_report_per_image_row(report, gt_img.name, gt_img.id) for gt_img in gt_imgs
             ],
         }
     )

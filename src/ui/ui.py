@@ -15,7 +15,7 @@ from src.ui.create_exam import (
     delete_attempt,
     clean_up as create_exam_clean_up,
 )
-from src.ui.report import (
+from src.report import (
     layout as report_layout,
     return_button as report_return_btn,
     results as report_results,
@@ -59,16 +59,11 @@ def go_to_report(value_dict):
     if report is None:
         report = refresh_report(value_dict)
 
-    exam = g.exams[workspace_id]
+    exam: Exam = g.exams[workspace_id]
     user = exam.get_user(user_id)
     attempt = user.get_last_attempt()
-    
-    render_report(
-        report,
-        exam,
-        user,
-        attempt
-    )
+
+    render_report(report, exam, user, attempt)
     report_results.loading = False
     report_return_btn.enable()
 
@@ -90,6 +85,7 @@ def start_new_attempt(value_dict):
     create_attempt(
         workspace=exam.workspace,
         user_id=user_id,
+        benchmark_project=exam.benchmark_project,
         benchmark_project_meta=exam.benchmark_project_meta,
         benchmark_dataset=attempt.dataset,
         classes=[oc.name for oc in attempt.project_meta.obj_classes],

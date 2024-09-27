@@ -28,20 +28,14 @@ from src.constants import DEFAULT_EXAM_PASSMARK, DEFAULT_MATCHING_THRESHOLD
 
 title_input = Input(size="small")
 exam_title = Field(title="Exam Title", content=title_input)
-select_dataset = SelectDataset(size="small", allowed_project_types=[sly.ProjectType.IMAGES])
+select_dataset = SelectDataset(size="small", allowed_project_types=g.ALLOWED_MODALITIES)
 select_classes = Select(items=[], multiple=True, size="small")
-select_all_classes_btn = Button(
-    text="Select all", button_type="text", button_size="mini"
-)
-deselect_all_classes_btn = Button(
-    text="Deselect all", button_type="text", button_size="mini"
-)
+select_all_classes_btn = Button(text="Select all", button_type="text", button_size="mini")
+deselect_all_classes_btn = Button(text="Deselect all", button_type="text", button_size="mini")
 select_tags = Select(items=[], multiple=True, size="small")
 select_all_tags_btn = Button(text="Select all", button_type="text", button_size="mini")
-deselect_all_tags_btn = Button(
-    text="Deselect all", button_type="text", button_size="mini"
-)
-becnhmark_project = Card(
+deselect_all_tags_btn = Button(text="Deselect all", button_type="text", button_size="mini")
+benchmark_project = Card(
     title="BENCHMARK PROJECT",
     description="Choose perfectly labeled project. Assigned users won't see original labels.\nYou can select only specific classes or tags to be labeled.",
     content=Container(
@@ -51,9 +45,7 @@ becnhmark_project = Card(
                 title="Classes",
                 content=Container(
                     widgets=[
-                        Flexbox(
-                            widgets=[select_all_classes_btn, deselect_all_classes_btn]
-                        ),
+                        Flexbox(widgets=[select_all_classes_btn, deselect_all_classes_btn]),
                         select_classes,
                     ],
                     gap=0,
@@ -122,7 +114,9 @@ exam_guide_select = Select(
 )
 exam_guide_one_of = OneOf(exam_guide_select)
 input_passmark = InputNumber(min=0, max=100, step=1, value=DEFAULT_EXAM_PASSMARK, size="small")
-matching_threshold = InputNumber(min=0, max=100, step=1, value=DEFAULT_MATCHING_THRESHOLD, size="small")
+matching_threshold = InputNumber(
+    min=0, max=100, step=1, value=DEFAULT_MATCHING_THRESHOLD, size="small"
+)
 input_attempts = InputNumber(min=0, max=100, step=1, value=1, size="small")
 maximum_attempts = RadioGroup(
     items=[
@@ -224,6 +218,12 @@ def create_labeling_job(
     tags_to_label,
     reviewer_id,
 ):
+    if project.type == str(sly.ProjectType.IMAGES):
+        items_ids = [img.id for img in g.api.image.get_list(dataset.id)]
+    elif project.type == str(sly.ProjectType.VIDEOS):
+        items_ids = [vid.id for vid in g.api.video.get_list(dataset.id)]
+    else:
+        raise ValueError("Invalid project type")
     return g.api.labeling_job.create(
         name=project.name,
         dataset_id=dataset.id,
@@ -233,12 +233,13 @@ def create_labeling_job(
         classes_to_label=classes_to_label,
         tags_to_label=tags_to_label,
         reviewer_id=reviewer_id,
-        images_ids=[img.id for img in g.api.image.get_list(dataset.id)],
+        images_ids=items_ids,
     )
 
 
 def create_attempt_project_for_user(
     workspace: sly.api.workspace_api.WorkspaceInfo,
+    benchmark_project: sly.ProjectInfo,
     user: sly.api.user_api.UserInfo,
     attempt: int,
     reviewer: int,
@@ -246,6 +247,7 @@ def create_attempt_project_for_user(
     project = g.api.project.create(
         workspace_id=workspace.id,
         name=f"{workspace.name}. User: {user.login}. Attempt: {attempt}",
+        type=benchmark_project.type,
         description="",
         change_name_if_conflict=True,
     )
@@ -283,6 +285,7 @@ def create_project_meta(
 def create_attempt(
     workspace,
     user_id,
+    benchmark_project,
     benchmark_project_meta,
     benchmark_dataset,
     classes,
@@ -293,13 +296,9 @@ def create_attempt(
 ):
     user_info = g.users.get(user_id)
     attempt_project = create_attempt_project_for_user(
-        workspace, user_info, attempt_num, reviewer
+        workspace, benchmark_project, user_info, attempt_num, reviewer
     )
-    attempt_project_meta = create_project_meta(
-        benchmark_project_meta,
-        classes,
-        tags
-    )
+    attempt_project_meta = create_project_meta(benchmark_project_meta, classes, tags)
     g.api.project.update_meta(attempt_project.id, attempt_project_meta)
     attempt_dataset = g.api.dataset.copy(
         attempt_project.id, benchmark_dataset.id, new_name=benchmark_dataset.name
@@ -344,11 +343,7 @@ def create_exam():
         return False
     passmark = input_passmark.get_value()
     threshold = matching_threshold.get_value()
-    attempts = (
-        None
-        if maximum_attempts.get_value() == "Unlimited"
-        else input_attempts.get_value()
-    )
+    attempts = None if maximum_attempts.get_value() == "Unlimited" else input_attempts.get_value()
     show_report_to_labelers = show_report_to_labelers_checkmark.is_checked()
     segmentation_mode = segmentation_mode_checkmark.is_checked()
 
@@ -375,10 +370,10 @@ def create_exam():
             "warning",
         )
         return False
-    
+
     status_bar.show()
     progress = status_bar(iterable=[step for step in range(100)])
-    
+
     # create workspace
     exam_workspace = create_exam_workspace(exam_name)
     progress.update(100 // (2 + len(users)))
@@ -418,10 +413,9 @@ def create_exam():
         "show_report_to_labelers": show_report_to_labelers,
         "created_by": g.user_id,
         "segmentation_mode": segmentation_mode,
+        "reviewer": reviewer,
     }
-    g.api.project.update_custom_data(
-        benchmark_project.id, benchmark_project_custom_data
-    )
+    g.api.project.update_custom_data(benchmark_project.id, benchmark_project_custom_data)
     progress.update(100 // (2 + len(users)))
 
     # create project and labeling job for each user
@@ -429,6 +423,7 @@ def create_exam():
         create_attempt(
             workspace=exam_workspace,
             user_id=user_id,
+            benchmark_project=benchmark_project,
             benchmark_project_meta=benchmark_project_meta,
             benchmark_dataset=benchmark_dataset,
             classes=classes_whitelist,
@@ -444,9 +439,7 @@ def create_exam():
 
 cancel_btn = Button(text="Cancel")
 confirm_buttons = Flexbox(widgets=[create_btn, cancel_btn])
-return_btn = Button(
-    text="Return to Exams", button_size="small", icon="zmdi zmdi-arrow-left"
-)
+return_btn = Button(text="Return to Exams", button_size="small", icon="zmdi zmdi-arrow-left")
 
 
 def clean_up():
@@ -470,17 +463,11 @@ def selected_dataset(value):
     classes = sly.ProjectMeta.from_json(
         g.api.project.get_meta(selected_dataset.project_id)
     ).obj_classes
-    tags = sly.ProjectMeta.from_json(
-        g.api.project.get_meta(selected_dataset.project_id)
-    ).tag_metas
-    select_classes.set(
-        items=[Select.Item(obj_class.name, obj_class.name) for obj_class in classes]
-    )
+    tags = sly.ProjectMeta.from_json(g.api.project.get_meta(selected_dataset.project_id)).tag_metas
+    select_classes.set(items=[Select.Item(obj_class.name, obj_class.name) for obj_class in classes])
     select_all_classes()
     select_classes.enable()
-    select_tags.set(
-        items=[Select.Item(tag_meta.name, tag_meta.name) for tag_meta in tags]
-    )
+    select_tags.set(items=[Select.Item(tag_meta.name, tag_meta.name) for tag_meta in tags])
     select_all_tags()
     select_tags.enable()
 
@@ -501,7 +488,7 @@ def select_all_tags():
 
 
 @deselect_all_tags_btn.click
-def deselect_all_classes():
+def deselect_all_tags():
     select_tags.set_value([])
 
 
@@ -510,7 +497,7 @@ layout = Container(
         Text("<h2>Create Exam</h2>"),
         return_btn,
         exam_title,
-        becnhmark_project,
+        benchmark_project,
         assigned_users,
         reviewers,
         exam_settings,

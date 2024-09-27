@@ -201,11 +201,7 @@ def _add_matching_metrics(
         result_values[metric_name_config[F1_MEASURE]] = (
             2
             * counters[TRUE_POSITIVE]
-            / (
-                2 * counters[TRUE_POSITIVE]
-                + counters[FALSE_NEGATIVE]
-                + counters[FALSE_POSITIVE]
-            )
+            / (2 * counters[TRUE_POSITIVE] + counters[FALSE_NEGATIVE] + counters[FALSE_POSITIVE])
         )
 
     for out_name, val in result_values.items():
@@ -225,9 +221,7 @@ def _add_matching_metrics(
 def _add_pixel_metrics(dest, counters, class_gt, image_gt_id=None, image_pred_id=None):
     result_values = dict()
     if counters[TOTAL_PIXELS] > 0:
-        result_values[PIXEL_ACCURACY] = (
-            1.0 - counters[ERROR_PIXELS] / counters[TOTAL_PIXELS]
-        )
+        result_values[PIXEL_ACCURACY] = 1.0 - counters[ERROR_PIXELS] / counters[TOTAL_PIXELS]
     if counters.get(UNION, 0) > 0:
         result_values[IOU] = counters[INTERSECTION] / counters[UNION]
 
@@ -243,9 +237,7 @@ def _add_pixel_metrics(dest, counters, class_gt, image_gt_id=None, image_pred_id
     return result_values
 
 
-def _maybe_add_average_metric(
-    dest, metrics, metric_name, image_gt_id=None, image_pred_id=None
-):
+def _maybe_add_average_metric(dest, metrics, metric_name, image_gt_id=None, image_pred_id=None):
     values = [m[metric_name] for m in metrics if metric_name in m]
     if len(values) > 0:
         avg_metric = np.mean(values).item()
@@ -261,12 +253,8 @@ def _maybe_add_average_metric(
         return {}
 
 
-def add_tag_counts(
-    dest_counters, tags_gt, tags_pred, tags_whitelist, tp_key, fp_key, fn_key
-):
-    effective_tags_gt = set(
-        (tag.name, tag.value) for tag in tags_gt if tag.name in tags_whitelist
-    )
+def add_tag_counts(dest_counters, tags_gt, tags_pred, tags_whitelist, tp_key, fp_key, fn_key):
+    effective_tags_gt = set((tag.name, tag.value) for tag in tags_gt if tag.name in tags_whitelist)
     effective_tags_pred = set(
         (tag.name, tag.value) for tag in tags_pred if tag.name in tags_whitelist
     )
@@ -296,7 +284,6 @@ def is_segmentation(label: Label, segmentation_mode: bool):
         return False
     if type(label.geometry) in SEGMENTATION_GEOMETRIES:
         return True
-    
 
 
 def compute_metrics(
@@ -325,16 +312,12 @@ def compute_metrics(
                 message="Ground truth annotations and Prediction annotations have different lengths."
             )
 
-        class_matching_counters = {
-            class_gt: _make_counters() for class_gt in class_mapping
-        }
+        class_matching_counters = {class_gt: _make_counters() for class_gt in class_mapping}
         class_pixel_counters = {
-            class_mapping[class_gt]: _make_pixel_counters()
-            for class_gt in class_mapping
+            class_mapping[class_gt]: _make_pixel_counters() for class_gt in class_mapping
         }
         tag_counters = {
-            tag_name: _make_counters()
-            for tag_name in set(tags_whitelist) | set(obj_tags_whitelist)
+            tag_name: _make_counters() for tag_name in set(tags_whitelist) | set(obj_tags_whitelist)
         }
         total_pixel_error = 0
         total_pixels = 0
@@ -353,15 +336,9 @@ def compute_metrics(
             gt_ann = sly.Annotation.from_json(gt_ann_info.annotation, meta)
             pred_ann = sly.Annotation.from_json(pred_ann_info.annotation, meta)
 
-            image_class_counters = {
-                class_gt: _make_counters() for class_gt in class_mapping
-            }
-            image_pixel_counters = {
-                class_gt: _make_pixel_counters() for class_gt in class_mapping
-            }
-            image_tag_counters = {
-                tag_name: _make_counters() for tag_name in tag_counters
-            }
+            image_class_counters = {class_gt: _make_counters() for class_gt in class_mapping}
+            image_pixel_counters = {class_gt: _make_pixel_counters() for class_gt in class_mapping}
+            image_tag_counters = {tag_name: _make_counters() for tag_name in tag_counters}
 
             image_class_overall_counters = _make_counters()
             image_tag_overall_counters = _make_counters()
@@ -392,15 +369,11 @@ def compute_metrics(
             nonseg_gt_class_to_indices = {}
             for idx in nonseg_gt_label_idxs:
                 label = gt_ann.labels[idx]
-                nonseg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(
-                    idx
-                )
+                nonseg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(idx)
             nonseg_pred_class_to_indices = {}
             for idx in nonseg_pred_labels_idxs:
                 label = pred_ann.labels[idx]
-                nonseg_pred_class_to_indices.setdefault(label.obj_class.name, []).append(
-                    idx
-                )
+                nonseg_pred_class_to_indices.setdefault(label.obj_class.name, []).append(idx)
 
             # segmentation labels
             seg_gt_label_idxs = [
@@ -417,9 +390,7 @@ def compute_metrics(
             seg_gt_class_to_indices = {}
             for idx in seg_gt_label_idxs:
                 label = gt_ann.labels[idx]
-                seg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(
-                    idx
-                )
+                seg_gt_class_to_indices.setdefault(label.obj_class.name, []).append(idx)
             seg_pred_class_to_indices = {}
             for idx in seg_pred_label_idxs:
                 label = pred_ann.labels[idx]
@@ -433,7 +404,9 @@ def compute_metrics(
                 [gt_ann.labels[idx].geometry for idx in seg_gt_label_idxs],
                 img_size=gt_ann.img_size,
             )
-            gt_label_idx_to_effective_mask_idx = {idx: effective_idx for effective_idx, idx in enumerate(seg_gt_label_idxs)}
+            gt_label_idx_to_effective_mask_idx = {
+                idx: effective_idx for effective_idx, idx in enumerate(seg_gt_label_idxs)
+            }
             (
                 seg_pred_effective_masks,
                 seg_pred_effective_canvas,
@@ -441,7 +414,9 @@ def compute_metrics(
                 [pred_ann.labels[idx].geometry for idx in seg_pred_label_idxs],
                 img_size=pred_ann.img_size,
             )
-            pred_label_idx_to_effective_mask_idx = {idx: effective_idx for effective_idx, idx in enumerate(seg_pred_label_idxs)}
+            pred_label_idx_to_effective_mask_idx = {
+                idx: effective_idx for effective_idx, idx in enumerate(seg_pred_label_idxs)
+            }
 
             # iterating over classes
             for gt_class, pred_class in class_mapping.items():
@@ -449,27 +424,19 @@ def compute_metrics(
                 this_image_class_counters = image_class_counters[gt_class]
 
                 # Non segmentation labels
-                
+
                 # Get indices of labels of matching classes
                 gt_class_indices = nonseg_gt_class_to_indices.get(gt_class, [])
                 pred_class_indices = nonseg_pred_class_to_indices.get(pred_class, [])
                 matching_results = match_indices_by_score(
-                    [
-                        gt_ann.labels[idx].geometry
-                        for idx in gt_class_indices
-                    ],
-                    [
-                        pred_ann.labels[idx].geometry
-                        for idx in pred_class_indices
-                    ],
+                    [gt_ann.labels[idx].geometry for idx in gt_class_indices],
+                    [pred_ann.labels[idx].geometry for idx in pred_class_indices],
                     iou_threshold,
                     safe_get_geometries_iou,
                 )
 
                 # Object matching counters
-                this_image_class_counters[TRUE_POSITIVE] = len(
-                    matching_results.matches
-                )
+                this_image_class_counters[TRUE_POSITIVE] = len(matching_results.matches)
                 this_image_class_counters[FALSE_NEGATIVE] = len(
                     matching_results.unmatched_indices_1
                 )
@@ -482,9 +449,7 @@ def compute_metrics(
                     add_tag_counts(
                         image_tag_counters,
                         gt_ann.labels[gt_class_indices[match.idx_1]].tags,
-                        pred_ann.labels[
-                            pred_class_indices[match.idx_2]
-                        ].tags,
+                        pred_ann.labels[pred_class_indices[match.idx_2]].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
                         fp_key=FALSE_POSITIVE,
@@ -504,9 +469,7 @@ def compute_metrics(
                     add_tag_counts(
                         image_tag_counters,
                         TagCollection(),
-                        pred_ann.labels[
-                            pred_class_indices[fp_label_idx]
-                        ].tags,
+                        pred_ann.labels[pred_class_indices[fp_label_idx]].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
                         fp_key=FALSE_POSITIVE,
@@ -518,9 +481,7 @@ def compute_metrics(
                     gt_match_idx = gt_class_indices[gt_match]
                     pred_match_idx = pred_class_indices[pred_match]
                     gt_geometry = gt_ann.labels[gt_match_idx].geometry
-                    pred_geometry = pred_ann.labels[
-                        pred_match_idx
-                    ].geometry
+                    pred_geometry = pred_ann.labels[pred_match_idx].geometry
                     gt_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
                     gt_geometry.draw(gt_canvas, color=True)
                     pred_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
@@ -531,12 +492,8 @@ def compute_metrics(
                     image_class_pixel_counters[INTERSECTION] += np.sum(
                         gt_canvas & pred_canvas
                     ).item()
-                    image_class_pixel_counters[UNION] += np.sum(
-                        gt_canvas | pred_canvas
-                    ).item()
-                    image_class_pixel_counters[ERROR_PIXELS] += np.sum(
-                        error_canvas
-                    ).item()
+                    image_class_pixel_counters[UNION] += np.sum(gt_canvas | pred_canvas).item()
+                    image_class_pixel_counters[ERROR_PIXELS] += np.sum(error_canvas).item()
                     common_bbox_area = int(
                         Rectangle.from_geometries_list([gt_geometry, pred_geometry]).area
                     )
@@ -547,28 +504,22 @@ def compute_metrics(
 
                 # Add errors to image errors canvas for unmatched labels
                 for gt_idx in matching_results.unmatched_indices_1:
-                    gt_geometry = gt_ann.labels[
-                        gt_class_indices[gt_idx]
-                    ].geometry
+                    gt_geometry = gt_ann.labels[gt_class_indices[gt_idx]].geometry
                     gt_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
                     gt_geometry.draw(gt_canvas, color=True)
                     image_errors_canvas |= gt_canvas
                 for pred_idx in matching_results.unmatched_indices_2:
-                    pred_geometry = pred_ann.labels[
-                        pred_class_indices[pred_idx]
-                    ].geometry
+                    pred_geometry = pred_ann.labels[pred_class_indices[pred_idx]].geometry
                     pred_canvas = np.zeros(gt_ann.img_size, dtype=np.bool)
                     pred_geometry.draw(pred_canvas, color=True)
                     image_errors_canvas |= pred_canvas
 
-
                 # Segmentation labels
                 gt_class_indices = seg_gt_class_to_indices.get(gt_class, [])
-                pred_class_indices = seg_pred_class_to_indices.get(
-                    pred_class, []
-                )
+                pred_class_indices = seg_pred_class_to_indices.get(pred_class, [])
                 seg_class_masks_gt = [
-                    seg_gt_effective_masks[gt_label_idx_to_effective_mask_idx[idx]] for idx in gt_class_indices
+                    seg_gt_effective_masks[gt_label_idx_to_effective_mask_idx[idx]]
+                    for idx in gt_class_indices
                 ]
                 seg_class_masks_pred = [
                     seg_pred_effective_masks[pred_label_idx_to_effective_mask_idx[idx]]
@@ -582,9 +533,7 @@ def compute_metrics(
                 )
 
                 # Object matching counters
-                this_image_class_counters[TRUE_POSITIVE] += len(
-                    matching_results.matches
-                )
+                this_image_class_counters[TRUE_POSITIVE] += len(matching_results.matches)
                 this_image_class_counters[FALSE_NEGATIVE] += len(
                     matching_results.unmatched_indices_1
                 )
@@ -597,9 +546,7 @@ def compute_metrics(
                     add_tag_counts(
                         image_tag_counters,
                         gt_ann.labels[gt_class_indices[match.idx_1]].tags,
-                        pred_ann.labels[
-                            pred_class_indices[match.idx_2]
-                        ].tags,
+                        pred_ann.labels[pred_class_indices[match.idx_2]].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
                         fp_key=FALSE_POSITIVE,
@@ -621,52 +568,30 @@ def compute_metrics(
                     add_tag_counts(
                         image_tag_counters,
                         TagCollection(),
-                        pred_ann.labels[
-                            pred_class_indices[fp_label_idx]
-                        ].tags,
+                        pred_ann.labels[pred_class_indices[fp_label_idx]].tags,
                         obj_tags_whitelist,
                         tp_key=TRUE_POSITIVE,
                         fp_key=FALSE_POSITIVE,
                         fn_key=FALSE_NEGATIVE,
                     )
 
-                gt_canvas = np.isin(
-                    seg_gt_effective_canvas, gt_class_indices
-                )
-                pred_canvas = np.isin(
-                    seg_pred_effective_canvas, pred_class_indices
-                )
-                error_canvas = (
-                    gt_canvas != pred_canvas
-                )
+                gt_canvas = np.isin(seg_gt_effective_canvas, gt_class_indices)
+                pred_canvas = np.isin(seg_pred_effective_canvas, pred_class_indices)
+                error_canvas = gt_canvas != pred_canvas
 
                 # Pixel counters
-                image_class_pixel_counters[INTERSECTION] += np.sum(
-                    gt_canvas & pred_canvas
-                ).item()
-                image_class_pixel_counters[UNION] += np.sum(
-                    gt_canvas | pred_canvas
-                ).item()
-                image_class_pixel_counters[ERROR_PIXELS] += np.sum(
-                    error_canvas
-                ).item()
-                image_class_pixel_counters[
-                    TOTAL_PIXELS
-                ] += error_canvas.size
+                image_class_pixel_counters[INTERSECTION] += np.sum(gt_canvas & pred_canvas).item()
+                image_class_pixel_counters[UNION] += np.sum(gt_canvas | pred_canvas).item()
+                image_class_pixel_counters[ERROR_PIXELS] += np.sum(error_canvas).item()
+                image_class_pixel_counters[TOTAL_PIXELS] += error_canvas.size
 
                 # Add nonrectangles differences to image errors canvas
                 image_errors_canvas |= error_canvas
 
                 # Update image class counters
-                _sum_update_counters(
-                    class_pixel_counters[gt_class], image_class_pixel_counters
-                )
-                _sum_update_counters(
-                    class_matching_counters[gt_class], this_image_class_counters
-                )
-                _sum_update_counters(
-                    image_class_overall_counters, this_image_class_counters
-                )
+                _sum_update_counters(class_pixel_counters[gt_class], image_class_pixel_counters)
+                _sum_update_counters(class_matching_counters[gt_class], this_image_class_counters)
+                _sum_update_counters(image_class_overall_counters, this_image_class_counters)
 
             # Update tag counters
             for tag_name, this_tag_counters in image_tag_counters.items():
@@ -748,14 +673,10 @@ def compute_metrics(
                 image_pred_id=pred_image_info.id,
             )
             if TAGS_F1 in image_tag_overall_metrics:
-                image_overall_score_components.update(
-                    {TAGS_F1: image_tag_overall_metrics[TAGS_F1]}
-                )
+                image_overall_score_components.update({TAGS_F1: image_tag_overall_metrics[TAGS_F1]})
 
             if len(image_overall_score_components) > 0:
-                overall_score = np.mean(
-                    list(image_overall_score_components.values())
-                ).item()
+                overall_score = np.mean(list(image_overall_score_components.values())).item()
                 _fill_metric_value(
                     result.add(MetricValue()),
                     OVERALL_SCORE,
