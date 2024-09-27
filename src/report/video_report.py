@@ -119,10 +119,7 @@ def tags_stat_table_click_cb(datapoint):
     tags_values_stat_table.read_json(
         {
             "columns": tags_values_stat_table_columns,
-            "data": [
-                row
-                for row in get_tags_values_stat_table_rows(report_to_dict(current_report), tag_name)
-            ],
+            "data": [row for row in get_tags_values_stat_table_rows(current_report, tag_name)],
         }
     )
     tags_values_stat_card.uncollapse()
@@ -296,9 +293,7 @@ def timeline_select_frame_cb(frame_n):
     report_per_image_table.read_json(
         {
             "columns": report_per_image_table_columns,
-            "data": [
-                get_report_per_image_row(report_to_dict(current_report), selected_video, frame_n)
-            ],
+            "data": [get_report_per_image_row(current_report, selected_video, frame_n)],
         }
     )
     show_images(frame_n)
@@ -321,44 +316,6 @@ def get_timeline_filters():
         else:
             filters[metric_name] = None
     return filters
-
-
-def report_to_dict(report):
-    report_dict = {"per_video": {}}
-    for video_metrics in report.get("per_video", []):
-        video_name = video_metrics["video_name"]
-        metrics = video_metrics["metrics"]
-        d = {}
-        for metric in metrics:
-            if metric["metric_name"] not in d:
-                d[metric["metric_name"]] = {}
-            if metric["gt_frame_n"] not in d[metric["metric_name"]]:
-                d[metric["metric_name"]][metric["gt_frame_n"]] = {
-                    "pred_frame_n": metric["pred_frame_n"]
-                }
-            d[metric["metric_name"]][metric["gt_frame_n"]][
-                (
-                    metric["class_gt"],
-                    metric["tag"] if isinstance(metric["tag"], str) else json.dumps(metric["tag"]),
-                )
-            ] = metric["value"]
-        report_dict["per_video"][video_name] = d
-    d = {}
-    for metric in report.get("overall", []):
-        if metric["metric_name"] not in d:
-            d[metric["metric_name"]] = {}
-        if metric["gt_frame_n"] not in d[metric["metric_name"]]:
-            d[metric["metric_name"]][metric["gt_frame_n"]] = {
-                "pred_frame_n": metric["pred_frame_n"]
-            }
-        d[metric["metric_name"]][metric["gt_frame_n"]][
-            (
-                metric["class_gt"],
-                metric["tag"] if isinstance(metric["tag"], str) else json.dumps(metric["tag"]),
-            )
-        ] = metric["value"]
-    report_dict["overall"] = d
-    return report_dict
 
 
 def download_frame(video_id, frame_n):
@@ -960,7 +917,6 @@ def _render_report(
 ):
     global current_report
     current_report = copy.deepcopy(report)
-    report = report_to_dict(report)
 
     # load videos
     global gt_vids
@@ -1064,9 +1020,7 @@ def timeline_click_cb(pointer):
     report_per_image_table.read_json(
         {
             "columns": report_per_image_table_columns,
-            "data": [
-                get_report_per_image_row(report_to_dict(current_report), selected_video, frame_n)
-            ],
+            "data": [get_report_per_image_row(current_report, selected_video, frame_n)],
         }
     )
     show_images(frame_n)
@@ -1074,8 +1028,7 @@ def timeline_click_cb(pointer):
 
 def apply_timeline_filters(*args):
     filters = get_timeline_filters()
-    report = report_to_dict(current_report)
-    intervals, colors = get_intervals_with_colors(report, filters, current_frame_range)
+    intervals, colors = get_intervals_with_colors(current_report, filters, current_frame_range)
     timeline.set(current_frame_range[1] - current_frame_range[0] + 1, intervals, colors)
 
 

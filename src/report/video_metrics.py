@@ -1,3 +1,4 @@
+import json
 import traceback
 from typing import Optional, List, Tuple
 import numpy as np
@@ -1022,6 +1023,46 @@ def compute_metrics(
     return result, difference_geometries
 
 
+def report_to_dict(report):
+    if "error" in report:
+        return report
+    report_dict = {"per_video": {}}
+    for video_metrics in report.get("per_video", []):
+        video_name = video_metrics["video_name"]
+        metrics = video_metrics["metrics"]
+        d = {}
+        for metric in metrics:
+            if metric["metric_name"] not in d:
+                d[metric["metric_name"]] = {}
+            if metric["gt_frame_n"] not in d[metric["metric_name"]]:
+                d[metric["metric_name"]][metric["gt_frame_n"]] = {
+                    "pred_frame_n": metric["pred_frame_n"]
+                }
+            d[metric["metric_name"]][metric["gt_frame_n"]][
+                (
+                    metric["class_gt"],
+                    metric["tag"] if isinstance(metric["tag"], str) else json.dumps(metric["tag"]),
+                )
+            ] = metric["value"]
+        report_dict["per_video"][video_name] = d
+    d = {}
+    for metric in report.get("overall", []):
+        if metric["metric_name"] not in d:
+            d[metric["metric_name"]] = {}
+        if metric["gt_frame_n"] not in d[metric["metric_name"]]:
+            d[metric["metric_name"]][metric["gt_frame_n"]] = {
+                "pred_frame_n": metric["pred_frame_n"]
+            }
+        d[metric["metric_name"]][metric["gt_frame_n"]][
+            (
+                metric["class_gt"],
+                metric["tag"] if isinstance(metric["tag"], str) else json.dumps(metric["tag"]),
+            )
+        ] = metric["value"]
+    report_dict["overall"] = d
+    return report_dict
+
+
 @sly.timeit
 def calculate_exam_report(
     gt_video_infos: List[VideoInfo],
@@ -1047,4 +1088,4 @@ def calculate_exam_report(
         segmentation_mode=segmentation_mode,
     )
     result, diff_bitmaps = compute_metrics(request, progress)
-    return result.to_json(), diff_bitmaps
+    return report_to_dict(result.to_json()), diff_bitmaps
