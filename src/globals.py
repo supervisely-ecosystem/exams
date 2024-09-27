@@ -18,3 +18,5 @@ exams = {}
 
 ALLOWED_MODALITIES = (sly.ProjectType.IMAGES, sly.ProjectType.VIDEOS)
 TEMP_DATA_PATH = "/tmp/consensus-videos"
+
+sly.fs.mkdir(TEMP_DATA_PATH)
