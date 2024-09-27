@@ -85,8 +85,10 @@ def render_report(
     attempt: Exam.ExamUser.Attempt,
 ):
     if exam.benchmark_project.type == str(sly.ProjectType.IMAGES):
+        results_select.set_value("image_results")
         return image_report.render_report(report, exam, user, attempt, progress)
     elif exam.benchmark_project.type == str(sly.ProjectType.VIDEOS):
+        results_select.set_value("video_results")
         return video_report.render_report(report, exam, user, attempt, progress)
     else:
         raise RuntimeError("Unknown project type.")
