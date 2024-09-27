@@ -473,6 +473,7 @@ report_per_image = Card(
     description="Set filters to see frames with errors and click on the timeline to see the difference",
     content=Container(
         widgets=[
+            Field(title="Select Video", content=report_per_image_video_select),
             Field(
                 title="Timeline filters",
                 description="Select metrics thresholds to display error frames on the timeline. Grey means there are no annotations on both frames for selected metrics",
@@ -491,7 +492,6 @@ report_per_image = Card(
                     style="place-items: center;",
                 ),
             ),
-            report_per_image_video_select,
             report_per_image_table,
             report_per_image_images,
         ]
