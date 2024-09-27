@@ -56,7 +56,7 @@ diff_vids: List[VideoInfo] = []
 gt_annotations: List[VideoAnnotation] = []
 pred_annotations: List[VideoAnnotation] = []
 diff_annotations: List[VideoAnnotation] = []
-current_frame_range = [0, 1]
+current_frame_range = [1, 1]
 
 
 # overall_score = Text("")
