@@ -280,7 +280,7 @@ def s(value):
     if vid is None:
         return
     timeline_select_frame.min = 0
-    timeline_select_frame.max = len(vid.frames_count)
+    timeline_select_frame.max = vid.frames_count
     timeline_select_frame.value = timeline_select_frame.min
     global selected_video
     selected_video = value
