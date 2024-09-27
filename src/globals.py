@@ -15,3 +15,8 @@ api = sly.Api()
 users = {user.id: user for user in api.user.get_team_members(team_id)}
 is_refreshing_report = False
 exams = {}
+
+ALLOWED_MODALITIES = (sly.ProjectType.IMAGES, sly.ProjectType.VIDEOS)
+TEMP_DATA_PATH = "/tmp/consensus-videos"
+
+sly.fs.mkdir(TEMP_DATA_PATH)
