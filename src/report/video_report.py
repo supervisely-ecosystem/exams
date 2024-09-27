@@ -56,7 +56,7 @@ diff_vids: List[VideoInfo] = []
 gt_annotations: List[VideoAnnotation] = []
 pred_annotations: List[VideoAnnotation] = []
 diff_annotations: List[VideoAnnotation] = []
-current_frame_range = [1, 1]
+current_frame_range = [0, 0]
 
 
 # overall_score = Text("")
@@ -280,8 +280,10 @@ def video_changed(value):
     if vid is None:
         return
     timeline_select_frame.min = 0
-    timeline_select_frame.max = vid.frames_count
+    timeline_select_frame.max = vid.frames_count-1
     timeline_select_frame.value = timeline_select_frame.min
+    global current_frame_range
+    current_frame_range = [0, vid.frames_count-1]
     global selected_video
     selected_video = value
 
