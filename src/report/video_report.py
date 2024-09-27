@@ -913,7 +913,7 @@ def render_report(
     results.loading = True
     return_button.disable()
     diff_project = get_diff_project(attempt.project)
-    diff_dataset = get_diff_dataset(attempt.dataset)
+    diff_dataset = get_diff_dataset(diff_project)
 
     if diff_project is None or diff_dataset is None:
         sly.logger.warning("Difference dataset not found. Recalculating report...")
