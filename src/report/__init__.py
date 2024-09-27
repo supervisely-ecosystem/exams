@@ -37,7 +37,11 @@ def update_report_status(report, attempt: Exam.ExamUser.Attempt):
     if attempt.project.type == str(sly.ProjectType.IMAGES):
         get_overall_score = image_report.get_overall_score
     elif attempt.project.type == str(sly.ProjectType.VIDEOS):
-        get_overall_score = video_report.get_overall_score
+
+        def get_overall_score(report):
+            report = video_report.report_to_dict(report)
+            return video_report.get_overall_score(report)
+
     else:
         raise RuntimeError("Unknown project type.")
 

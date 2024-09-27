@@ -119,10 +119,7 @@ def tags_stat_table_click_cb(datapoint):
     tags_values_stat_table.read_json(
         {
             "columns": tags_values_stat_table_columns,
-            "data": [
-                row
-                for row in get_tags_values_stat_table_rows(report_to_dict(current_report), tag_name)
-            ],
+            "data": [row for row in get_tags_values_stat_table_rows(current_report, tag_name)],
         }
     )
     tags_values_stat_card.uncollapse()
@@ -296,9 +293,7 @@ def timeline_select_frame_cb(frame_n):
     report_per_image_table.read_json(
         {
             "columns": report_per_image_table_columns,
-            "data": [
-                get_report_per_image_row(report_to_dict(current_report), selected_video, frame_n)
-            ],
+            "data": [get_report_per_image_row(current_report, selected_video, frame_n)],
         }
     )
     show_images(frame_n)
@@ -923,6 +918,10 @@ def render_report(
         error_notification.show()
         return
 
+    report = report_to_dict(report)
+    global current_report
+    current_report = copy.deepcopy(report)
+
     passmark = exam.get_passmark()
     overall_score = get_overall_score(report)
     assigned_to.set(g.users.get(user.user_id).login, status="text")
@@ -958,10 +957,6 @@ def _render_report(
     diff_project: sly.ProjectInfo,
     diff_dataset: sly.DatasetInfo,
 ):
-    global current_report
-    current_report = copy.deepcopy(report)
-    report = report_to_dict(report)
-
     # load videos
     global gt_vids
     global pred_vids
@@ -1064,9 +1059,7 @@ def timeline_click_cb(pointer):
     report_per_image_table.read_json(
         {
             "columns": report_per_image_table_columns,
-            "data": [
-                get_report_per_image_row(report_to_dict(current_report), selected_video, frame_n)
-            ],
+            "data": [get_report_per_image_row(current_report, selected_video, frame_n)],
         }
     )
     show_images(frame_n)
@@ -1074,8 +1067,7 @@ def timeline_click_cb(pointer):
 
 def apply_timeline_filters(*args):
     filters = get_timeline_filters()
-    report = report_to_dict(current_report)
-    intervals, colors = get_intervals_with_colors(report, filters, current_frame_range)
+    intervals, colors = get_intervals_with_colors(current_report, filters, current_frame_range)
     timeline.set(current_frame_range[1] - current_frame_range[0] + 1, intervals, colors)
 
 
