@@ -682,7 +682,7 @@ def get_report_per_image_row_values(report, video_name, frame_n):
     }
     for metric_name in metrics.keys():
         try:
-            metrics[metric_name] = report[video_name][metric_name][frame_n][("", "")]
+            metrics[metric_name] = report["per_video"][video_name][metric_name][frame_n][("", "")]
         except KeyError:
             pass
     return [
