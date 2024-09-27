@@ -280,10 +280,10 @@ def video_changed(value):
     if vid is None:
         return
     timeline_select_frame.min = 0
-    timeline_select_frame.max = vid.frames_count-1
+    timeline_select_frame.max = vid.frames_count - 1
     timeline_select_frame.value = timeline_select_frame.min
     global current_frame_range
-    current_frame_range = [0, vid.frames_count-1]
+    current_frame_range = [0, vid.frames_count - 1]
     global selected_video
     selected_video = value
 
@@ -408,12 +408,12 @@ def show_images(frame_n):
         raise RuntimeError("Video not found")
 
     # gt image
-    frame_np = download_frame(gt_video_info.id, frame_n - 1)
+    frame_np = download_frame(gt_video_info.id, frame_n)
     save_img(frame_np, "gt.jpg")
 
     # pred image
     if pred_video_info.id != gt_video_info.id:
-        frame_np = download_frame(pred_video_info.id, frame_n - 1)
+        frame_np = download_frame(pred_video_info.id, frame_n)
     save_img(frame_np, "pred.jpg")
 
     # gt annotation
@@ -421,7 +421,7 @@ def show_images(frame_n):
     labels = [
         sly.Label(geometry=fig.geometry, obj_class=fig.video_object.obj_class)
         for fig in gt_annotation.figures
-        if fig.frame_index == frame_n - 1
+        if fig.frame_index == frame_n
     ]
     gt_ann = sly.Annotation(frame_shape, labels=labels)
 
@@ -430,7 +430,7 @@ def show_images(frame_n):
     labels = [
         sly.Label(geometry=fig.geometry, obj_class=fig.video_object.obj_class)
         for fig in pred_annotation.figures
-        if fig.frame_index == frame_n - 1
+        if fig.frame_index == frame_n
     ]
     pred_ann = sly.Annotation(frame_shape, labels=labels)
 
@@ -765,7 +765,7 @@ def unite_ranges(ranges: List[List[int]]):
     return res
 
 
-def get_intervals_with_colors(report: dict, filters: dict = None, frame_range=[1, 1]):
+def get_intervals_with_colors(report: dict, filters: dict = None, frame_range=[0, 0]):
     def get_color(frame_n):
         values = get_report_per_image_row_values(report, selected_video, frame_n)
         current_color = EMPTY_TIMELINE_COLOR
