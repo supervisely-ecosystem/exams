@@ -1,4 +1,5 @@
 import json
+import os
 import time
 
 from supervisely.app.widgets import (
@@ -39,11 +40,17 @@ error_notification = NotificationBox(title="Report Error", box_type="error", des
 error_notification.hide()
 
 
-def save_report(report, attempt):
+def save_report(report, attempt, progress=None):
     with open("report.json", "w") as f:
         json.dump(report, f)
     report_path = f"/exam_data/{attempt.project.id}/report.json"
-    g.api.file.upload(g.team_id, "report.json", report_path)
+    pbar = None
+    if progress is not None:
+        progress.show()
+        pbar = progress(message="Uploading report...", total=sly.fs.get_file_size("report.json"))
+    g.api.file.upload(g.team_id, "report.json", report_path, progress_cb=pbar)
+    if progress is not None:
+        progress.hide()
 
 
 def get_report(workspace_id, project_id):

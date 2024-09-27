@@ -1012,13 +1012,13 @@ def compute_metrics(
         result.error_message = exc.message
         difference_geometries = []
         if progress is not None:
-            progress.update(gt_video_info.frames_count)
+            progress.update(sum([gt_video_info.frames_count for gt_video_info in gt_video_infos]))
     except Exception as exc:
         result = ComputeMetricsResult()
         result.error_message = "Unexpected exception: {}".format(traceback.format_exc())
         difference_geometries = []
         if progress is not None:
-            progress.update(gt_video_info.frames_count)
+            progress.update(sum([gt_video_info.frames_count for gt_video_info in gt_video_infos]))
     return result, difference_geometries
 
 

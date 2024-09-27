@@ -1,14 +1,6 @@
-import json
-import time
 import supervisely as sly
 from supervisely.app import DataJson
-from supervisely.app.widgets import (
-    Container,
-    Text,
-    Card,
-    Table,
-    GridGallery,
-)
+from supervisely.app.widgets import Container, Text, Card, Table, GridGallery, Progress
 
 import src.globals as g
 from src.report.image_metrics import calculate_exam_report
@@ -365,55 +357,67 @@ def get_ann_infos(dataset: sly.DatasetInfo):
 
 
 @sly.timeit
-def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt):
+def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt, progress: Progress):
     return_button.disable()
     class_mapping = {
         obj_class.name: obj_class.name for obj_class in attempt.project_meta.obj_classes
     }
-    report, diffs = calculate_exam_report(
-        united_meta=attempt.project_meta,
-        img_infos_gt=get_img_infos(exam.benchmark_dataset),
-        img_infos_pred=get_img_infos(attempt.dataset),
-        ann_infos_gt=get_ann_infos(exam.benchmark_dataset),
-        ann_infos_pred=get_ann_infos(attempt.dataset),
-        class_mapping=class_mapping,
-        tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
-        obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
-        iou_threshold=exam.iou_threshold() / 100,
-        segmentation_mode=exam.segmentation_mode,
-    )
+    progress.show()
+    with progress(
+        message="Calculating report...", total=exam.benchmark_dataset.images_count
+    ) as pbar:
+        report, diffs = calculate_exam_report(
+            united_meta=attempt.project_meta,
+            img_infos_gt=get_img_infos(exam.benchmark_dataset),
+            img_infos_pred=get_img_infos(attempt.dataset),
+            ann_infos_gt=get_ann_infos(exam.benchmark_dataset),
+            ann_infos_pred=get_ann_infos(attempt.dataset),
+            class_mapping=class_mapping,
+            tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
+            obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
+            iou_threshold=exam.iou_threshold() / 100,
+            segmentation_mode=exam.segmentation_mode,
+            progress=pbar,
+        )
 
     # upload diff annotations
-    diff_project, diff_meta = get_or_create_diff_project(attempt.project, exam.attempt_project_meta)
-    diff_dataset = get_or_create_diff_dataset(diff_project, attempt.dataset)
-    error_obj_class = diff_meta.obj_classes.get("Error")
-    if error_obj_class is None:
-        error_obj_class = diff_meta.obj_classes.get("error")
-    if error_obj_class is None:
-        error_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
-        diff_meta = diff_meta.add_obj_class(error_obj_class)
-        g.api.project.update_meta(diff_project.id, diff_meta)
-    for batch in sly.batched(list(zip(diffs, get_img_infos(diff_dataset)))):
-        anns = []
-        img_ids = []
-        for diff, diff_img in batch:
-            if diff is None:
-                continue
-            anns.append(
-                sly.Annotation(
-                    img_size=(diff_img.height, diff_img.width),
-                    labels=[
-                        sly.Label(
-                            geometry=diff,
-                            obj_class=error_obj_class,
-                        )
-                    ],
+    with progress(message="Creating diff project...", total=1) as pbar:
+        diff_project, diff_meta = get_or_create_diff_project(
+            attempt.project, exam.attempt_project_meta
+        )
+        diff_dataset = get_or_create_diff_dataset(diff_project, attempt.dataset)
+        pbar.update(1)
+    with progress(message="Uploading diff annotations...", total=len(diffs)) as pbar:
+        error_obj_class = diff_meta.obj_classes.get("Error")
+        if error_obj_class is None:
+            error_obj_class = diff_meta.obj_classes.get("error")
+        if error_obj_class is None:
+            error_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
+            diff_meta = diff_meta.add_obj_class(error_obj_class)
+            g.api.project.update_meta(diff_project.id, diff_meta)
+        for batch in sly.batched(list(zip(diffs, get_img_infos(diff_dataset)))):
+            anns = []
+            img_ids = []
+            for diff, diff_img in batch:
+                if diff is None:
+                    continue
+                anns.append(
+                    sly.Annotation(
+                        img_size=(diff_img.height, diff_img.width),
+                        labels=[
+                            sly.Label(
+                                geometry=diff,
+                                obj_class=error_obj_class,
+                            )
+                        ],
+                    )
                 )
-            )
-            img_ids.append(diff_img.id)
-        g.api.annotation.upload_anns(img_ids, anns)
+                img_ids.append(diff_img.id)
+            g.api.annotation.upload_anns(img_ids, anns)
+            pbar.update(len(batch))
 
     return_button.enable()
+    progress.hide()
 
     return report
 
@@ -423,6 +427,7 @@ def render_report(
     exam: Exam,
     user: Exam.ExamUser,
     attempt: Exam.ExamUser.Attempt,
+    progress: Progress,
 ):
     results.loading = True
     return_button.disable()
@@ -435,6 +440,7 @@ def render_report(
         report = calculate_report(
             exam=exam,
             attempt=attempt,
+            progress=progress,
         )
         diff_project = get_diff_project(attempt.project)
         diff_dataset = get_diff_dataset(diff_project)

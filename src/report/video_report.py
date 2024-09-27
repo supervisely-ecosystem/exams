@@ -20,6 +20,7 @@ from supervisely.app.widgets import (
     Switch,
     Flexbox,
     Select,
+    Progress,
 )
 from supervisely.app import DataJson
 from supervisely.imaging.image import write as write_image
@@ -820,70 +821,85 @@ def get_intervals_with_colors(report: dict, filters: dict = None, frame_range=[1
     )
 
 
-def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt):
+def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt, progress: Progress):
     return_button.disable()
     class_mapping = {
         obj_class.name: obj_class.name for obj_class in attempt.project_meta.obj_classes
     }
     gt_video_infos = get_vid_infos(exam.benchmark_dataset)
-    pred_video_infos = get_vid_infos(attempt.dataset)
-    gt_video_anns = [
-        sly.VideoAnnotation.from_json(
-            ann_json, exam.benchmark_project_meta, key_id_map=sly.KeyIdMap()
+    progress.show()
+    with progress(
+        message="Calculating report...", total=sum(vid.frames_count for vid in gt_video_infos)
+    ) as pbar:
+        pred_video_infos = get_vid_infos(attempt.dataset)
+        gt_video_anns = [
+            sly.VideoAnnotation.from_json(
+                ann_json, exam.benchmark_project_meta, key_id_map=sly.KeyIdMap()
+            )
+            for ann_json in g.api.video.annotation.download_bulk(
+                exam.benchmark_dataset.id, [vid.id for vid in get_vid_infos(exam.benchmark_dataset)]
+            )
+        ]
+        pred_video_anns = [
+            sly.VideoAnnotation.from_json(ann_json, attempt.project_meta, key_id_map=sly.KeyIdMap())
+            for ann_json in g.api.video.annotation.download_bulk(
+                attempt.dataset.id, [vid.id for vid in get_vid_infos(attempt.dataset)]
+            )
+        ]
+        report, diffs = calculate_exam_report(
+            gt_video_infos=gt_video_infos,
+            pred_video_infos=pred_video_infos,
+            gt_video_anns=gt_video_anns,
+            pred_video_anns=pred_video_anns,
+            class_mapping=class_mapping,
+            tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
+            obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
+            iou_threshold=exam.iou_threshold() / 100,
+            segmentation_mode=exam.segmentation_mode,
+            progress=pbar,
         )
-        for ann_json in g.api.video.annotation.download_bulk(
-            exam.benchmark_dataset.id, [vid.id for vid in get_vid_infos(exam.benchmark_dataset)]
-        )
-    ]
-    pred_video_anns = [
-        sly.VideoAnnotation.from_json(ann_json, attempt.project_meta, key_id_map=sly.KeyIdMap())
-        for ann_json in g.api.video.annotation.download_bulk(
-            attempt.dataset.id, [vid.id for vid in get_vid_infos(attempt.dataset)]
-        )
-    ]
-    report, diffs = calculate_exam_report(
-        gt_video_infos=gt_video_infos,
-        pred_video_infos=pred_video_infos,
-        gt_video_anns=gt_video_anns,
-        pred_video_anns=pred_video_anns,
-        class_mapping=class_mapping,
-        tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
-        obj_tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
-        iou_threshold=exam.iou_threshold() / 100,
-        segmentation_mode=exam.segmentation_mode,
-    )
 
     # upload diff annotations
-    diff_project, diff_meta = get_or_create_diff_project(attempt.project, exam.attempt_project_meta)
-    diff_dataset = get_or_create_diff_dataset(diff_project, attempt.dataset)
-    diff_video_infos = get_vid_infos(diff_dataset)
-    diff_video_name_to_info = {video_info.name: video_info for video_info in diff_video_infos}
-    error_obj_class = diff_meta.obj_classes.get("Error")
-    if error_obj_class is None:
-        error_obj_class = diff_meta.obj_classes.get("error")
-    if error_obj_class is None:
-        error_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
-        diff_meta = diff_meta.add_obj_class(error_obj_class)
-        g.api.project.update_meta(diff_project.id, diff_meta)
-    for pred_video_info, vid_diffs in zip(pred_video_infos, diffs):
-        diff_video_info = diff_video_name_to_info[pred_video_info.name]
-        frame_size = (diff_video_info.frame_height, diff_video_info.frame_width)
-        video_object = sly.VideoObject(error_obj_class)
-        objects = sly.VideoObjectCollection([video_object])
-        frames = sly.FrameCollection()
-        for frame_index, diff in enumerate(vid_diffs):
-            if diff is None:
-                continue
-            figure = sly.VideoFigure(video_object, geometry=diff, frame_index=frame_index)
-            frame = sly.Frame(frame_index, figures=[figure])
-            frames.add(frame)
-
-        ann = sly.VideoAnnotation(
-            frame_size, frames_count=diff_video_info.frames_count, objects=objects, frames=frames
+    with progress(message="Creating diff project...", total=1) as pbar:
+        diff_project, diff_meta = get_or_create_diff_project(
+            attempt.project, exam.attempt_project_meta
         )
-        g.api.video.annotation.append(diff_video_info.id, ann)
+        diff_dataset = get_or_create_diff_dataset(diff_project, attempt.dataset)
+        pbar.update(1)
+    with progress(message="Uploading diff annotations...", total=len(diffs)) as pbar:
+        diff_video_infos = get_vid_infos(diff_dataset)
+        diff_video_name_to_info = {video_info.name: video_info for video_info in diff_video_infos}
+        error_obj_class = diff_meta.obj_classes.get("Error")
+        if error_obj_class is None:
+            error_obj_class = diff_meta.obj_classes.get("error")
+        if error_obj_class is None:
+            error_obj_class = sly.ObjClass("Error", sly.Bitmap, color=[255, 0, 0])
+            diff_meta = diff_meta.add_obj_class(error_obj_class)
+            g.api.project.update_meta(diff_project.id, diff_meta)
+        for pred_video_info, vid_diffs in zip(pred_video_infos, diffs):
+            diff_video_info = diff_video_name_to_info[pred_video_info.name]
+            frame_size = (diff_video_info.frame_height, diff_video_info.frame_width)
+            video_object = sly.VideoObject(error_obj_class)
+            objects = sly.VideoObjectCollection([video_object])
+            frames = sly.FrameCollection()
+            for frame_index, diff in enumerate(vid_diffs):
+                if diff is None:
+                    continue
+                figure = sly.VideoFigure(video_object, geometry=diff, frame_index=frame_index)
+                frame = sly.Frame(frame_index, figures=[figure])
+                frames.add(frame)
+
+            ann = sly.VideoAnnotation(
+                frame_size,
+                frames_count=diff_video_info.frames_count,
+                objects=objects,
+                frames=frames,
+            )
+            g.api.video.annotation.append(diff_video_info.id, ann)
+            pbar.update(1)
 
     return_button.enable()
+    progress.hide()
     return report
 
 
@@ -892,6 +908,7 @@ def render_report(
     exam: Exam,
     user: Exam.ExamUser,
     attempt: Exam.ExamUser.Attempt,
+    progress: Progress,
 ):
     results.loading = True
     return_button.disable()
@@ -903,6 +920,7 @@ def render_report(
         report = calculate_report(
             exam=exam,
             attempt=attempt,
+            progress=progress,
         )
         diff_project = get_diff_project(attempt.project)
         diff_dataset = get_diff_dataset(diff_project)

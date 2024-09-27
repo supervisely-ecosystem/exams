@@ -1,4 +1,4 @@
-from supervisely.app.widgets import OneOf, Select, Container
+from supervisely.app.widgets import OneOf, Select, Container, Progress
 import supervisely as sly
 
 import src.report.image_report as image_report
@@ -20,15 +20,17 @@ results_select = Select(
         Select.Item(value="video_results", content=video_report.results),
     ]
 )
+progress = Progress("Calculating report...", show_percents=True)
+progress.hide()
 results = OneOf(results_select)
-layout = Container(widgets=[return_button, results, error_notification], gap=20)
+layout = Container(widgets=[return_button, progress, results, error_notification], gap=20)
 
 
-def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt):
+def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt, progress):
     if exam.benchmark_project.type == str(sly.ProjectType.IMAGES):
-        return image_report.calculate_report(exam, attempt)
+        return image_report.calculate_report(exam, attempt, progress)
     elif exam.benchmark_project.type == str(sly.ProjectType.VIDEOS):
-        return video_report.calculate_report(exam, attempt)
+        return video_report.calculate_report(exam, attempt, progress)
     else:
         raise RuntimeError("Unknown project type.")
 
@@ -66,9 +68,10 @@ def refresh_report(value_dict):
     report = calculate_report(
         exam=exam,
         attempt=attempt,
+        progress=progress,
     )
 
-    save_report(report, attempt)
+    save_report(report, attempt, progress)
     update_report_status(report, attempt)
     g.is_refreshing_report = False
 
@@ -82,9 +85,9 @@ def render_report(
     attempt: Exam.ExamUser.Attempt,
 ):
     if exam.benchmark_project.type == str(sly.ProjectType.IMAGES):
-        return image_report.render_report(report, exam, user, attempt)
+        return image_report.render_report(report, exam, user, attempt, progress)
     elif exam.benchmark_project.type == str(sly.ProjectType.VIDEOS):
-        return video_report.render_report(report, exam, user, attempt)
+        return video_report.render_report(report, exam, user, attempt, progress)
     else:
         raise RuntimeError("Unknown project type.")
 
