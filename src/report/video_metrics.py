@@ -932,7 +932,7 @@ def compute_metrics(
             }
             for (tag_name, tag_value), this_tag_counters in tag_value_counters.items():
                 _sum_update_counters(
-                    overall_tag_value_counters.setdefault(tag_name, _make_counters()),
+                    overall_tag_value_counters.setdefault((tag_name, tag_value), _make_counters()),
                     this_tag_counters,
                 )
             _maybe_add_average_metric(this_video_result, per_tag_value_metrics.values(), TAGS_F1)
