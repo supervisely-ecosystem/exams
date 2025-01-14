@@ -353,7 +353,7 @@ def get_img_infos(dataset: sly.DatasetInfo):
 
 
 def get_ann_infos(dataset: sly.DatasetInfo):
-    return sorted(g.api.annotation.get_list(dataset.id), key=lambda x: x.image_id)
+    return sorted(g.api.annotation.download_batch(dataset.id), key=lambda x: x.image_id)
 
 
 @sly.timeit
@@ -484,7 +484,7 @@ def render_report(
     global gt_img_anns
     gt_img_anns = {
         ann_info.image_id: sly.Annotation.from_json(ann_info.annotation, exam.attempt_project_meta)
-        for ann_info in g.api.annotation.get_list(exam.benchmark_dataset.id)
+        for ann_info in g.api.annotation.download_batch(exam.benchmark_dataset.id)
     }
     global pred_img_anns
     pred_img_anns = {
