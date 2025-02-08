@@ -245,13 +245,6 @@ def create_attempt_project_for_user(
     attempt: int,
     reviewer: int,
 ):
-    if user is None:
-        show_dialog(
-            "User not found",
-            f"User with id {user_id} not found in the team",
-            "error",
-        )
-        return
     project = g.api.project.create(
         workspace_id=workspace.id,
         name=f"{workspace.name}. User: {user.login}. Attempt: {attempt}",
@@ -395,22 +388,17 @@ def create_exam():
 
     # copy benchmark project to exam worksapce
     source_dataset_info = g.api.dataset.get_info_by_id(source_dataset_id)
+    source_project_info = g.api.project.get_info_by_id(source_dataset_info.project_id)
     benchmark_project_meta = sly.ProjectMeta.from_json(
         g.api.project.get_meta(source_dataset_info.project_id)
     )
-    copy_project_task_id = g.api.project.clone(
-        source_dataset_info.project_id,
-        exam_workspace.id,
-        f"{exam_workspace.name}. Benchmark project",
+    benchmark_project = g.api.project.create(
+        workspace_id=exam_workspace.id,
+        name=f"{exam_workspace.name}. Benchmark project",
+        type=source_project_info.type
     )
-    g.api.task.wait(copy_project_task_id, g.api.task.Status.FINISHED)
-
-    benchmark_project = g.api.project.get_info_by_name(
-        exam_workspace.id, f"{exam_workspace.name}. Benchmark project"
-    )
-    benchmark_dataset = g.api.dataset.get_info_by_name(
-        benchmark_project.id, source_dataset_info.name
-    )
+    g.api.project.update_meta(benchmark_project.id, benchmark_project_meta)
+    benchmark_dataset = g.api.dataset.copy(benchmark_project.id, source_dataset_id, new_name=source_dataset_info.name, with_annotations=True)
 
     # add exam settings to becnhmark project custom data
     benchmark_project_custom_data = {
