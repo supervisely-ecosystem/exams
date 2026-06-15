@@ -209,6 +209,50 @@ def create_exam_workspace(exam_name: str):
     return ws
 
 
+def get_items_api(project_type: str):
+    if project_type == str(sly.ProjectType.IMAGES):
+        return g.api.image
+    if project_type == str(sly.ProjectType.VIDEOS):
+        return g.api.video
+    raise ValueError("Invalid project type")
+
+
+def get_dataset_infos_recursive(dataset: sly.DatasetInfo):
+    return [dataset] + g.api.dataset.get_list(
+        dataset.project_id,
+        recursive=True,
+        parent_id=dataset.id,
+    )
+
+
+def get_dataset_item_ids_recursive(dataset: sly.DatasetInfo, project_type: str):
+    items_api = get_items_api(project_type)
+    item_ids = []
+    for ds in get_dataset_infos_recursive(dataset):
+        item_ids.extend([item.id for item in items_api.get_list(ds.id)])
+    return item_ids
+
+
+def copy_dataset_flat(
+    dst_project_id: int,
+    src_dataset: sly.DatasetInfo,
+    project_type: str,
+    with_annotations: bool = False,
+):
+    items_api = get_items_api(project_type)
+    item_ids = get_dataset_item_ids_recursive(src_dataset, project_type)
+    new_dataset = g.api.dataset.create(
+        dst_project_id,
+        src_dataset.name,
+        src_dataset.description,
+        change_name_if_conflict=True,
+        custom_data=src_dataset.custom_data,
+    )
+    if len(item_ids) > 0:
+        items_api.copy_batch(new_dataset.id, item_ids, False, with_annotations)
+    return new_dataset
+
+
 def create_labeling_job(
     project: sly.ProjectInfo,
     dataset: sly.DatasetInfo,
@@ -219,12 +263,11 @@ def create_labeling_job(
     tags_to_label,
     reviewer_id,
 ):
-    if project.type == str(sly.ProjectType.IMAGES):
-        items_ids = [img.id for img in g.api.image.get_list(dataset.id)]
-    elif project.type == str(sly.ProjectType.VIDEOS):
-        items_ids = [vid.id for vid in g.api.video.get_list(dataset.id)]
-    else:
-        raise ValueError("Invalid project type")
+    items_ids = get_dataset_item_ids_recursive(dataset, project.type)
+    if len(items_ids) == 0:
+        raise RuntimeError(
+            "The selected dataset does not contain any direct or nested items, so a labeling job cannot be created."
+        )
     return g.api.labeling_job.create(
         name=project.name,
         dataset_id=dataset.id,
@@ -308,8 +351,10 @@ def create_attempt(
     )
     attempt_project_meta = create_project_meta(benchmark_project_meta, classes, tags)
     g.api.project.update_meta(attempt_project.id, attempt_project_meta)
-    attempt_dataset = g.api.dataset.copy(
-        attempt_project.id, benchmark_dataset.id, new_name=benchmark_dataset.name
+    attempt_dataset = copy_dataset_flat(
+        attempt_project.id,
+        benchmark_dataset,
+        benchmark_project.type,
     )
     labeling_job = create_labeling_job(
         project=attempt_project,
@@ -354,6 +399,7 @@ def create_exam():
     attempts = None if maximum_attempts.get_value() == "Unlimited" else input_attempts.get_value()
     show_report_to_labelers = show_report_to_labelers_checkmark.is_checked()
     segmentation_mode = segmentation_mode_checkmark.is_checked()
+    creator = g.users.get(g.user_id)
 
     if g.api.workspace.exists(g.team_id, f'Exam: "{exam_name}"'):
         sly.app.show_dialog(
@@ -379,63 +425,91 @@ def create_exam():
         )
         return False
 
+    source_dataset_info = g.api.dataset.get_info_by_id(source_dataset_id)
+    source_project_info = g.api.project.get_info_by_id(source_dataset_info.project_id)
+    source_item_ids = get_dataset_item_ids_recursive(source_dataset_info, source_project_info.type)
+    if len(source_item_ids) == 0:
+        sly.app.show_dialog(
+            "Dataset is empty",
+            "The selected dataset does not contain any items. If it uses nested datasets, they will now be supported, but this dataset still appears to be empty.",
+            "warning",
+        )
+        return False
+
     status_bar.show()
     progress = status_bar(iterable=[step for step in range(100)])
 
-    # create workspace
-    exam_workspace = create_exam_workspace(exam_name)
-    progress.update(100 // (2 + len(users)))
-
-    # copy benchmark project to exam worksapce
-    source_dataset_info = g.api.dataset.get_info_by_id(source_dataset_id)
-    source_project_info = g.api.project.get_info_by_id(source_dataset_info.project_id)
-    benchmark_project_meta = sly.ProjectMeta.from_json(
-        g.api.project.get_meta(source_dataset_info.project_id)
-    )
-    benchmark_project = g.api.project.create(
-        workspace_id=exam_workspace.id,
-        name=f"{exam_workspace.name}. Benchmark project",
-        type=source_project_info.type
-    )
-    g.api.project.update_meta(benchmark_project.id, benchmark_project_meta)
-    benchmark_dataset = g.api.dataset.copy(benchmark_project.id, source_dataset_id, new_name=source_dataset_info.name, with_annotations=True)
-
-    # add exam settings to becnhmark project custom data
-    benchmark_project_custom_data = {
-        "is_benchmark_project": True,
-        "source_project_id": source_dataset_info.project_id,
-        "source_dataset_id": source_dataset_id,
-        "benchmark_dataset_id": benchmark_dataset.id,
-        "exam_name": exam_name,
-        "classes": classes_whitelist,
-        "tags": tags_whitelist,
-        "assignees": users,
-        "passmark": passmark,
-        "threshold": threshold,
-        "attempts": attempts,
-        "show_report_to_labelers": show_report_to_labelers,
-        "created_by": g.user_id,
-        "segmentation_mode": segmentation_mode,
-        "reviewer": reviewer,
-    }
-    g.api.project.update_custom_data(benchmark_project.id, benchmark_project_custom_data)
-    progress.update(100 // (2 + len(users)))
-
-    # create project and labeling job for each user
-    for user_id in users:
-        create_attempt(
-            workspace=exam_workspace,
-            user_id=user_id,
-            benchmark_project=benchmark_project,
-            benchmark_project_meta=benchmark_project_meta,
-            benchmark_dataset=benchmark_dataset,
-            classes=classes_whitelist,
-            tags=tags_whitelist,
-            guide=guide,
-            reviewer=reviewer,
-            attempt_num=1,
-        )
+    try:
+        # create workspace
+        exam_workspace = create_exam_workspace(exam_name)
         progress.update(100 // (2 + len(users)))
+
+        # copy benchmark project to exam worksapce
+        benchmark_project_meta = sly.ProjectMeta.from_json(
+            g.api.project.get_meta(source_dataset_info.project_id)
+        )
+        benchmark_project = g.api.project.create(
+            workspace_id=exam_workspace.id,
+            name=f"{exam_workspace.name}. Benchmark project",
+            type=source_project_info.type
+        )
+        g.api.project.update_meta(benchmark_project.id, benchmark_project_meta)
+        benchmark_dataset = copy_dataset_flat(
+            benchmark_project.id,
+            source_dataset_info,
+            source_project_info.type,
+            with_annotations=True,
+        )
+
+        # add exam settings to becnhmark project custom data
+        benchmark_project_custom_data = {
+            "is_benchmark_project": True,
+            "source_project_id": source_dataset_info.project_id,
+            "source_dataset_id": source_dataset_id,
+            "benchmark_dataset_id": benchmark_dataset.id,
+            "exam_name": exam_name,
+            "classes": classes_whitelist,
+            "tags": tags_whitelist,
+            "assignees": users,
+            "passmark": passmark,
+            "threshold": threshold,
+            "attempts": attempts,
+            "show_report_to_labelers": show_report_to_labelers,
+            "created_by": g.user_id,
+            "created_by_id": g.user_id,
+            "created_by_name": (creator.name or creator.login) if creator is not None else None,
+            "created_by_login": creator.login if creator is not None else None,
+            "segmentation_mode": segmentation_mode,
+            "reviewer_id": reviewer,
+            "reviewer": reviewer,
+        }
+        g.api.project.update_custom_data(benchmark_project.id, benchmark_project_custom_data)
+        progress.update(100 // (2 + len(users)))
+
+        # create project and labeling job for each user
+        for user_id in users:
+            create_attempt(
+                workspace=exam_workspace,
+                user_id=user_id,
+                benchmark_project=benchmark_project,
+                benchmark_project_meta=benchmark_project_meta,
+                benchmark_dataset=benchmark_dataset,
+                classes=classes_whitelist,
+                tags=tags_whitelist,
+                guide=guide,
+                reviewer=reviewer,
+                attempt_num=1,
+            )
+            progress.update(100 // (2 + len(users)))
+    except Exception as e:
+        sly.app.show_dialog(
+            "Failed to create exam",
+            str(e),
+            "error",
+        )
+        status_bar.hide()
+        return False
+
     status_bar.hide()
     return True
 

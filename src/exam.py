@@ -26,8 +26,16 @@ class Exam:
             def number(self):
                 return get_attempt_number(self.project)
 
-        def __init__(self, user_id, attempts: List[Exam.ExamUser.Attempt]):
+        def __init__(
+            self,
+            user_id,
+            attempts: List[Exam.ExamUser.Attempt],
+            user_name: Optional[str] = None,
+            user_login: Optional[str] = None,
+        ):
             self.user_id = user_id
+            self.user_name = user_name
+            self.user_login = user_login
             self.attempts = sorted(attempts, key=lambda x: x.project.id, reverse=True)
         
         def get_last_attempt(self) -> Exam.ExamUser.Attempt:
@@ -93,6 +101,8 @@ class Exam:
             users=[
                 cls.ExamUser(
                     user_id=user_id,
+                    user_name=projects[0].custom_data.get("user_name"),
+                    user_login=projects[0].custom_data.get("user_login"),
                     attempts=[
                         cls.ExamUser.Attempt(
                             project=project,
@@ -133,11 +143,22 @@ class Exam:
         return self.workspace.created_at
 
     def created_by(self):
+        return self.created_by_id()
+
+    def created_by_id(self):
         try:
-            return self.benchmark_project.custom_data["created_by"]
+            return self.benchmark_project.custom_data.get(
+                "created_by_id", self.benchmark_project.custom_data["created_by"]
+            )
         except KeyError:
             sly.logger.warning(f"Can't find creator for exam: {self.name()} (workspace id: {self.workspace.id}).")
             return None
+
+    def created_by_name(self):
+        return self.benchmark_project.custom_data.get("created_by_name")
+
+    def created_by_login(self):
+        return self.benchmark_project.custom_data.get("created_by_login")
 
     def max_attempts(self):
         try:
@@ -155,7 +176,9 @@ class Exam:
     
     def reviewer_id(self):
         try:
-            return self.benchmark_project.custom_data["reviewer_id"]
+            return self.benchmark_project.custom_data.get(
+                "reviewer_id", self.benchmark_project.custom_data["reviewer"]
+            )
         except KeyError:
             sly.logger.warning(f"Can't find reviewer for exam: {self.name()} (workspace id: {self.workspace.id}).")
             return None

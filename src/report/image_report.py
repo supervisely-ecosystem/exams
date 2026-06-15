@@ -459,7 +459,13 @@ def render_report(
 
     passmark = exam.get_passmark()
     overall_score = get_overall_score(report)
-    assigned_to.set(g.users.get(user.user_id).login, status="text")
+    active_user = g.users.get(user.user_id)
+    assigned_to.set(
+        active_user.login
+        if active_user is not None
+        else (user.user_login or user.user_name or f"Unknown (ID: {user.user_id})"),
+        status="text",
+    )
     exam_passmark.set(f"{passmark}%", status="text")
     exam_score.set(f"{round(overall_score*100, 2)}%", status="text")
     status.set(

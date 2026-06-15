@@ -16,6 +16,15 @@ from src.ui.create_exam import (
     delete_attempt,
     clean_up as create_exam_clean_up,
 )
+from src.ui.add_user import (
+    layout as add_user_layout,
+    return_btn as add_user_return_btn,
+    cancel_btn as add_user_cancel_btn,
+    confirm_btn as add_user_confirm_btn,
+    open_page as open_add_user_page,
+    clean_up as add_user_clean_up,
+    add_user_to_exam,
+)
 from src.report import (
     layout as report_layout,
     return_button as report_return_btn,
@@ -30,11 +39,13 @@ from src.exam import Exam
 
 DASHBOARD = "dashboard"
 CREATE_EXAM = "create_exam"
+ADD_USER = "add_user"
 REPORT = "report"
 
 pages = [
     Select.Item(value=DASHBOARD, label="Dashboard", content=dashboard_layout),
     Select.Item(value=CREATE_EXAM, label="Create Exam", content=create_exam_layout),
+    Select.Item(value=ADD_USER, label="Add User", content=add_user_layout),
     Select.Item(value=REPORT, label="Report", content=report_layout),
 ]
 select_page = Select(items=pages)
@@ -52,14 +63,6 @@ def go_to_report(value_dict):
     workspace_id = value_dict["workspace_id"]
     project_id = value_dict["project_id"]
     user_id = value_dict["user_id"]
-    user = g.users.get(user_id)
-    if user is None:
-        show_dialog(
-            "User not found",
-            f"User with id {user_id} not found in the team",
-            "error",
-        )
-        return
 
     select_page.set_value(REPORT)
     report_results.loading = True
@@ -83,8 +86,8 @@ def start_new_attempt(value_dict):
     user = g.users.get(user_id)
     if user is None:
         show_dialog(
-            "User not found",
-            f"User with id {user_id} not found in the team",
+            "User is not active",
+            f"User with id {user_id} is no longer available in the team. A new attempt cannot be created.",
             "error",
         )
         return
@@ -117,6 +120,13 @@ def start_new_attempt(value_dict):
     exams_table.table.loading = False
 
 
+@exams_table.table.add_user_clicked
+def go_to_add_user(value_dict):
+    workspace_id = value_dict["workspace_id"]
+    open_add_user_page(workspace_id)
+    select_page.set_value(ADD_USER)
+
+
 @exams_table.new_exam_button.click
 def go_to_create_exam():
     select_page.set_value(CREATE_EXAM)
@@ -125,15 +135,25 @@ def go_to_create_exam():
 def go_to_dashboard():
     select_page.set_value(DASHBOARD)
     create_exam_clean_up()
+    add_user_clean_up()
 
 
 create_exam_cancel_btn.click(go_to_dashboard)
 create_exam_return_btn.click(go_to_dashboard)
+add_user_cancel_btn.click(go_to_dashboard)
+add_user_return_btn.click(go_to_dashboard)
 
 
 @create_exam_confirm_btn.click
 def create_exam_and_return():
     if create_exam():
+        go_to_dashboard()
+        update_exams_table()
+
+
+@add_user_confirm_btn.click
+def add_user_and_return():
+    if add_user_to_exam():
         go_to_dashboard()
         update_exams_table()
 

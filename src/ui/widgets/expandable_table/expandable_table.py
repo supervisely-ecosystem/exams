@@ -17,7 +17,6 @@ from supervisely import (
 )
 from supervisely.imaging.color import rgb2hex
 from supervisely.api.labeling_job_api import LabelingJobApi, LabelingJobInfo
-from supervisely.api.user_api import UserInfo
 from supervisely.project.project import Project
 
 LabelingJobStatus = LabelingJobApi.Status
@@ -41,6 +40,7 @@ class ExpandableTable(Widget):
         VIEW_CLICK = "view_clicked_cb"
         REFRESH_CLICK = "refresh_clicked_cb"
         NEW_ATTEMPT_CLICK = "new_attempt_clicked_cb"
+        ADD_USER_CLICK = "add_user_clicked_cb"
 
     class Exam:
         def __init__(
@@ -51,7 +51,8 @@ class ExpandableTable(Widget):
             benchmark_project_meta: ProjectMeta,
             passmark: int,
             created_at: str,
-            created_by: UserInfo,
+            created_by_name: str,
+            created_by_id: Optional[int] = None,
             attempts: Optional[int] = None,
             classes: Union[List[ObjClass], ObjClassCollection] = [],
             tags: Union[List[TagMeta], TagMetaCollection] = [],
@@ -63,7 +64,8 @@ class ExpandableTable(Widget):
             self._benchmark_project_meta = benchmark_project_meta
             self._passmark = passmark
             self._created_at = created_at
-            self._created_by = created_by
+            self._created_by_name = created_by_name
+            self._created_by_id = created_by_id
             self._attempts = attempts
             self._classes = classes
             self._tags = tags
@@ -81,6 +83,7 @@ class ExpandableTable(Widget):
             attempts: int,
             attempt_project: ProjectInfo,
             labeling_job: LabelingJobInfo,
+            has_report: bool = False,
         ) -> None:
             self._user_name = user_name
             self._user_id = user_id
@@ -88,6 +91,7 @@ class ExpandableTable(Widget):
             self._attempts = attempts
             self._attempt_project = attempt_project
             self._labeling_job = labeling_job
+            self._has_report = has_report
 
     def __init__(
         self,
@@ -99,6 +103,7 @@ class ExpandableTable(Widget):
         self._refresh_click_handled = False
         self._view_click_handled = False
         self._new_attempt_click_handled = False
+        self._add_user_click_handled = False
         super().__init__(widget_id=widget_id, file_path=__file__)
 
     def parse_exams(self):
@@ -116,6 +121,7 @@ class ExpandableTable(Widget):
             status = STATUS_TEXT[user._labeling_job.status]
 
             exam_score = user._attempt_project.custom_data.get("overall_score", None)
+            has_report = user._has_report or exam_score is not None
             if exam_score is not None:
                 if exam_score * 100 > exam._passmark:
                     status = f"PASSED ({round(exam_score*100, 2)}%)"
@@ -134,6 +140,7 @@ class ExpandableTable(Widget):
                 "project_id": user._attempt_project.id,
                 "loading": False,
                 "passmark": exam._passmark,
+                "has_report": has_report,
             }
 
         def parse_exam_row(exam: ExpandableTable.Exam):
@@ -170,7 +177,7 @@ class ExpandableTable(Widget):
                     "preview_url": exam._benchmark_project.image_preview_url,
                     "description": f"{exam._benchmark_project.items_count} {exam._benchmark_project.type} in project",
                 },
-                "created_by": exam._created_by.name,
+                "created_by": exam._created_by_name or "Unknown",
                 "expandable_content": {
                     "table_data": {
                         "columns": ExpandableTable.columns.EXAM_USERS_TABLE_COLUMNS,
@@ -267,6 +274,28 @@ class ExpandableTable(Widget):
         server = self._sly_app.get_server()
 
         self._new_attempt_click_handled = True
+
+        @server.post(route_path)
+        def _click():
+            try:
+                value_dict = self.get_selected_cell()
+                if value_dict is None:
+                    return
+                value_dict: dict
+                func(value_dict)
+            except Exception as e:
+                logger.error(
+                    traceback.format_exc(), exc_info=True, extra={"exc_str": str(e)}
+                )
+                raise e
+
+        return _click
+
+    def add_user_clicked(self, func):
+        route_path = self.get_route_path(ExpandableTable.Routes.ADD_USER_CLICK)
+        server = self._sly_app.get_server()
+
+        self._add_user_click_handled = True
 
         @server.post(route_path)
         def _click():

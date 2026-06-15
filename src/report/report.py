@@ -56,7 +56,7 @@ def save_report(report, attempt, progress=None):
 def get_report(workspace_id, project_id):
     while g.is_refreshing_report:
         time.sleep(0.2)
-    report_path = f"/exam_data/{workspace_id}/{project_id}/report.json"
+    report_path = f"/exam_data/{project_id}/report.json"
     if g.api.file.exists(g.team_id, report_path):
         g.api.file.download(g.team_id, report_path, "report.json")
         with open("report.json", "r") as f:

@@ -23,6 +23,8 @@ def is_teammate(user_id):
 def get_user_login(exam_user: Exam.ExamUser):
     user = g.users.get(exam_user.user_id)
     if user is None:
+        if exam_user.user_login:
+            return exam_user.user_login
         return f"Unknown (ID: {exam_user.user_id})"
     return user.login
 
@@ -30,8 +32,32 @@ def get_user_login(exam_user: Exam.ExamUser):
 def get_user_name(exam_user: Exam.ExamUser):
     user = g.users.get(exam_user.user_id)
     if user is None:
+        if exam_user.user_name:
+            return exam_user.user_name
         return f"Unknown (ID: {exam_user.user_id})"
     return user.name
+
+
+def get_creator_id(exam: Exam):
+    return exam.created_by_id()
+
+
+def get_creator_name(exam: Exam):
+    creator_id = exam.created_by_id()
+    creator = g.users.get(creator_id)
+    if creator is not None:
+        return creator.name or creator.login or f"Unknown (ID: {creator_id})"
+    if exam.created_by_name():
+        return exam.created_by_name()
+    if exam.created_by_login():
+        return exam.created_by_login()
+    if creator_id is not None:
+        return f"Unknown (ID: {creator_id})"
+    return "Unknown"
+
+
+def has_saved_report(project_id: int):
+    return g.api.file.exists(g.team_id, f"/exam_data/{project_id}/report.json")
 
 
 @timeit
@@ -172,7 +198,8 @@ class ExamsTable:
                 benchmark_project_meta=exam.benchmark_project_meta,
                 passmark=exam.get_passmark(),
                 created_at=exam.created_at(),
-                created_by=g.users.get(exam.created_by()),
+                created_by_name=get_creator_name(exam),
+                created_by_id=get_creator_id(exam),
                 attempts=exam.max_attempts(),
                 classes=exam.attempt_project_meta.obj_classes,
                 tags=exam.attempt_project_meta.tag_metas,
@@ -184,6 +211,7 @@ class ExamsTable:
                         attempts=len(exam_user.attempts),
                         attempt_project=exam_user.get_last_attempt().project,
                         labeling_job=exam_user.get_last_attempt().labeling_job,
+                        has_report=has_saved_report(exam_user.get_last_attempt().project.id),
                     )
                     for exam_user in exam.get_all_users()
                 ],
@@ -204,8 +232,10 @@ class ExamsTable:
             for user in exam._users:
                 if user._user_id not in [u[0] for u in all_users]:
                     all_users.append((user._user_id, user._user_name))
-            if exam._created_by.id not in [c[0] for c in creators]:
-                creators.append((exam._created_by.id, exam._created_by.name))
+            if exam._created_by_id is None:
+                continue
+            if exam._created_by_id not in [c[0] for c in creators]:
+                creators.append((exam._created_by_id, exam._created_by_name))
         self._select_filter_by_assignee.set(
             items=[Select.Item(user[0], user[1]) for user in all_users]
         )
@@ -275,7 +305,7 @@ class ExamsTable:
             return exams
         filtered_exams = []
         for exam in exams:
-            if exam._created_by.id in filter_val:
+            if exam._created_by_id in filter_val:
                 filtered_exams.append(exam)
         return filtered_exams
 
