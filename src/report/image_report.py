@@ -1,4 +1,6 @@
 import supervisely as sly
+import time
+from fastapi import Response
 from supervisely.app import DataJson
 from supervisely.app.widgets import Container, Text, Card, Table, GridGallery, Progress
 
@@ -27,6 +29,10 @@ diff_imgs = []
 gt_img_anns = {}
 pred_img_anns = {}
 diff_img_anns = {}
+
+
+def get_image_proxy_url(img: sly.ImageInfo):
+    return f"./exam-report/image/{img.dataset_id}/{img.id}?{time.time()}"
 
 obj_count_per_class_table_columns = [
     "NAME",
@@ -80,6 +86,7 @@ report_per_image_table = Table(columns=report_per_image_table_columns)
 @report_per_image_table.click
 def show_images(datapoint):
     global report_per_image_images
+    report_per_image_images.loading = True
     report_per_image_images.clean_up()
     row = datapoint.row
     img_name = row["NAME"]
@@ -98,19 +105,39 @@ def show_images(datapoint):
     diff_ann = diff_img_anns[diff_img.id]
 
     report_per_image_images.append(
-        gt_img.preview_url, gt_ann, title="Benchmark (Ground Truth)", column_index=0
+        get_image_proxy_url(gt_img), gt_ann, title="Benchmark (Ground Truth)", column_index=0
     )
     report_per_image_images.append(
-        pred_img.preview_url, pred_ann, title="Labeler output", column_index=1
+        get_image_proxy_url(pred_img), pred_ann, title="Labeler output", column_index=1
     )
     report_per_image_images.append(
-        diff_img.preview_url, diff_ann, title="Difference", column_index=2
+        get_image_proxy_url(diff_img), diff_ann, title="Difference", column_index=2
     )
 
+    report_per_image_images.loading = False
     DataJson().send_changes()
 
 
 report_per_image_images = GridGallery(3)
+
+_server = report_per_image_table._sly_app.get_server()
+
+
+@_server.get("/exam-report/image/{dataset_id}/{image_id}")
+def get_report_image(dataset_id: int, image_id: int):
+    try:
+        img_bytes = g.api.image.download_bytes(dataset_id, [image_id])
+        if len(img_bytes) == 0:
+            return Response(status_code=404)
+        return Response(content=img_bytes[0], media_type="image/jpeg")
+    except Exception:
+        sly.logger.warning(
+            f"Failed to load report image for dataset_id={dataset_id}, image_id={image_id}",
+            exc_info=True,
+        )
+        return Response(status_code=404)
+
+
 report_per_image = Card(
     title="REPORT PER IMAGE",
     content=Container(
@@ -459,7 +486,13 @@ def render_report(
 
     passmark = exam.get_passmark()
     overall_score = get_overall_score(report)
-    assigned_to.set(g.users.get(user.user_id).login, status="text")
+    active_user = g.users.get(user.user_id)
+    assigned_to.set(
+        active_user.login
+        if active_user is not None
+        else (user.user_login or user.user_name or f"Unknown (ID: {user.user_id})"),
+        status="text",
+    )
     exam_passmark.set(f"{passmark}%", status="text")
     exam_score.set(f"{round(overall_score*100, 2)}%", status="text")
     status.set(

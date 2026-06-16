@@ -52,7 +52,6 @@ def update_report_status(report, attempt: Exam.ExamUser.Attempt):
         custom_data["overall_score"] = "Error"
     else:
         custom_data["overall_score"] = get_overall_score(report)
-    custom_data = g.api.project.get_info_by_id(attempt.project.id).custom_data
     g.api.project.update_custom_data(attempt.project.id, custom_data)
 
 
