@@ -1,4 +1,5 @@
 import supervisely as sly
+import time
 from fastapi import Response
 from supervisely.app import DataJson
 from supervisely.app.widgets import Container, Text, Card, Table, GridGallery, Progress
@@ -31,7 +32,7 @@ diff_img_anns = {}
 
 
 def get_image_proxy_url(img: sly.ImageInfo):
-    return f"/exam-report/image/{img.dataset_id}/{img.id}"
+    return f"./exam-report/image/{img.dataset_id}/{img.id}?{time.time()}"
 
 obj_count_per_class_table_columns = [
     "NAME",
@@ -85,6 +86,7 @@ report_per_image_table = Table(columns=report_per_image_table_columns)
 @report_per_image_table.click
 def show_images(datapoint):
     global report_per_image_images
+    report_per_image_images.loading = True
     report_per_image_images.clean_up()
     row = datapoint.row
     img_name = row["NAME"]
@@ -112,6 +114,7 @@ def show_images(datapoint):
         get_image_proxy_url(diff_img), diff_ann, title="Difference", column_index=2
     )
 
+    report_per_image_images.loading = False
     DataJson().send_changes()
 
 
