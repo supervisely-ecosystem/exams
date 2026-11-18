@@ -320,7 +320,7 @@ class ExamsTable:
                 labeling_job = user._labeling_job
                 status = labeling_job.status
                 exam_score = user._attempt_project.custom_data.get("overall_score", None)
-                if exam_score is not None:
+                if isinstance(exam_score, (int, float)):
                     if exam_score * 100 > exam._passmark:
                         status = f"passed"
                     else:

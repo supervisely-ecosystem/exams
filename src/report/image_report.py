@@ -384,6 +384,40 @@ def get_ann_infos(dataset: sly.DatasetInfo):
     return sorted(g.api.annotation.download_batch(dataset.id, image_ids), key=lambda x: x.image_id)
 
 
+def _filter_tags_json(tags_json, meta: sly.ProjectMeta):
+    return [
+        tag
+        for tag in tags_json
+        if meta.get_tag_meta(tag if isinstance(tag, str) else tag.get("name")) is not None
+    ]
+
+
+def filter_ann_json(ann_json: dict, meta: sly.ProjectMeta) -> dict:
+    """Keep only the classes and tags of the given meta.
+
+    The benchmark project keeps all classes and tags of the source project,
+    while the exam meta has only the ones chosen for the exam.
+    """
+    ann_json = dict(ann_json)
+    ann_json["tags"] = _filter_tags_json(ann_json.get("tags", []), meta)
+    objects = []
+    for obj in ann_json.get("objects", []):
+        if meta.get_obj_class(obj["classTitle"]) is None:
+            continue
+        obj = dict(obj)
+        obj["tags"] = _filter_tags_json(obj.get("tags", []), meta)
+        objects.append(obj)
+    ann_json["objects"] = objects
+    return ann_json
+
+
+def get_gt_ann_infos(dataset: sly.DatasetInfo, meta: sly.ProjectMeta):
+    return [
+        ann_info._replace(annotation=filter_ann_json(ann_info.annotation, meta))
+        for ann_info in get_ann_infos(dataset)
+    ]
+
+
 @sly.timeit
 def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt, progress: Progress):
     return_button.disable()
@@ -398,7 +432,7 @@ def calculate_report(exam: Exam, attempt: Exam.ExamUser.Attempt, progress: Progr
             united_meta=attempt.project_meta,
             img_infos_gt=get_img_infos(exam.benchmark_dataset),
             img_infos_pred=get_img_infos(attempt.dataset),
-            ann_infos_gt=get_ann_infos(exam.benchmark_dataset),
+            ann_infos_gt=get_gt_ann_infos(exam.benchmark_dataset, attempt.project_meta),
             ann_infos_pred=get_ann_infos(attempt.dataset),
             class_mapping=class_mapping,
             tags_whitelist=[tm.name for tm in attempt.project_meta.tag_metas],
@@ -518,7 +552,10 @@ def render_report(
     global gt_img_anns
     image_ids = [img_info.id for img_info in g.api.image.get_list(exam.benchmark_dataset.id)]
     gt_img_anns = {
-        ann_info.image_id: sly.Annotation.from_json(ann_info.annotation, exam.attempt_project_meta)
+        ann_info.image_id: sly.Annotation.from_json(
+            filter_ann_json(ann_info.annotation, exam.attempt_project_meta),
+            exam.attempt_project_meta,
+        )
         for ann_info in g.api.annotation.download_batch(exam.benchmark_dataset.id, image_ids)
     }
     global pred_img_anns
