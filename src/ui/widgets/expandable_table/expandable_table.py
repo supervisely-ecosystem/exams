@@ -122,11 +122,14 @@ class ExpandableTable(Widget):
 
             exam_score = user._attempt_project.custom_data.get("overall_score", None)
             has_report = user._has_report or exam_score is not None
-            if exam_score is not None:
+            if isinstance(exam_score, (int, float)):
                 if exam_score * 100 > exam._passmark:
                     status = f"PASSED ({round(exam_score*100, 2)}%)"
                 else:
                     status = f"FAILED ({round(exam_score*100, 2)}%)"
+            elif exam_score is not None:
+                # report calculation failed ("Error") or the value is not a number
+                status = "ERROR"
 
             return {
                 "user_id": user._user_id,
